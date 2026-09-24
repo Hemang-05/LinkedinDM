@@ -1,0 +1,409 @@
+[
+  {
+    "id": "p-1",
+    "name": "Rahul Sharma",
+    "jobTitle": "Founder & CEO",
+    "company": "XYZ AI",
+    "companyWebsite": "https://xyzai.example.com",
+    "location": "Bengaluru, India (Remote eligible)",
+    "connectionDegree": "1st",
+    "headline": "Founder & CEO @ XYZ AI | We are hiring Full Stack AI Engineers! (Remote India)",
+    "notes": "Actively scaling their multi-agent workflow platform. Looking for engineers with React, Next.js, Python, FastAPI and LLM/RAG experience.",
+    "linkedinUrl": "https://linkedin.com/in/rahul-sharma-xyzai",
+    "classification": "Founder",
+    "relationshipType": "CEO",
+    "status": "Contacted",
+    "createdAt": "2026-09-24T08:00:00.000Z",
+    "updatedAt": "2026-09-24T08:20:12.373Z",
+    "jobOpportunity": {
+      "id": "j-1",
+      "title": "Full Stack AI Engineer",
+      "company": "XYZ AI",
+      "url": "https://xyzai.example.com/careers/fullstack-ai",
+      "location": "Remote India",
+      "remoteStatus": "Remote India",
+      "postedDate": "2026-09-23",
+      "description": "Building autonomous agent workflows and RAG systems. Tech stack: React, Next.js, TypeScript, Python, FastAPI, PostgreSQL, Vector search.",
+      "source": "Founder LinkedIn Post",
+      "hiringSignals": [
+        "We're hiring",
+        "Founding team expansion"
+      ],
+      "requiredSkills": [
+        "React",
+        "Next.js",
+        "TypeScript",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "RAG"
+      ],
+      "minExperienceYears": 3
+    },
+    "score": {
+      "totalScore": 100,
+      "items": [
+        {
+          "category": "Role Match",
+          "points": 25,
+          "maxPoints": 25,
+          "matched": true,
+          "reason": "Matches target role: \"Full Stack AI Engineer\""
+        },
+        {
+          "category": "Stack Match",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Overlapping stack: React, Next.js, TypeScript, Python, FastAPI, PostgreSQL, LLM/RAG"
+        },
+        {
+          "category": "Remote India",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Remote India or Worldwide eligible"
+        },
+        {
+          "category": "Experience Match",
+          "points": 15,
+          "maxPoints": 15,
+          "matched": true,
+          "reason": "Ideal alignment for 3+ years experience"
+        },
+        {
+          "category": "Founder / CTO / Decision Maker",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Founder with direct hiring influence"
+        },
+        {
+          "category": "Recent Hiring Signal",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Active hiring post or verified engineering opening"
+        }
+      ],
+      "strongMatches": [
+        "React",
+        "Next.js",
+        "TypeScript",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "LLM/RAG"
+      ],
+      "gaps": [],
+      "blockers": [],
+      "recommendedAction": "High Priority - Immediate Direct Outreach"
+    },
+    "draftedMessage": "Hi Rahul, noticed what you're building at XYZ AI and saw you're looking for a Full Stack AI Engineer.\n\nI'm a Full Stack / AI Engineer with 3+ years of experience building production systems using React/Next.js, TypeScript, Python/FastAPI, PostgreSQL, and LLM/RAG architectures. I thrive in founder-led startups with end-to-end ownership from conception to deployment.\n\nWould love to explore whether my background could help accelerate your roadmap at XYZ AI.\n\nBest,\nHemang",
+    "followUpDay5Message": "Hi Rahul, wanted to quickly bump this in case it got buried. Still very keen on the Full Stack AI Engineer opportunity at XYZ AI. Happy to share a quick overview of recent projects or hop on a brief call whenever convenient for you.\n\nBest,\nHemang",
+    "followUpDay12Message": "Hi Rahul, following up one last time regarding the Full Stack AI Engineer role at XYZ AI. I understand priorities shift quickly—if the timing isn't right now, no worries at all. Wishing you and the team continued success, and let's stay in touch!\n\nBest,\nHemang",
+    "lastContactedDate": "2026-09-24"
+  },
+  {
+    "id": "p-2",
+    "name": "Priya Singh",
+    "jobTitle": "Technical Recruiter",
+    "company": "ABC Technologies",
+    "companyWebsite": "https://abctech.example.com",
+    "location": "Remote, India",
+    "connectionDegree": "2nd",
+    "headline": "Talent Acquisition Partner @ ABC Technologies | Hiring AI Engineers & Product Engineers",
+    "notes": "Reached out about high-growth Series A startup building enterprise AI copilots.",
+    "linkedinUrl": "https://linkedin.com/in/priya-singh-abctech",
+    "classification": "Recruiter",
+    "relationshipType": "Recruiter",
+    "status": "Not contacted",
+    "createdAt": "2026-09-23T10:30:00.000Z",
+    "updatedAt": "2026-09-23T10:30:00.000Z",
+    "jobOpportunity": {
+      "id": "j-2",
+      "title": "AI Engineer / Full Stack",
+      "company": "ABC Technologies",
+      "url": "https://abctech.example.com/jobs/ai-eng",
+      "location": "Remote Worldwide (India eligible)",
+      "remoteStatus": "Remote Worldwide",
+      "postedDate": "2026-09-22",
+      "description": "Seeking full stack AI engineers to lead LLM evaluation pipelines, Next.js frontends and FastAPI microservices. LangGraph experience a plus.",
+      "source": "LinkedIn Job Board",
+      "hiringSignals": [
+        "Hiring engineers",
+        "Urgent replacement"
+      ],
+      "requiredSkills": [
+        "React",
+        "TypeScript",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "LangGraph"
+      ],
+      "minExperienceYears": 3
+    },
+    "score": {
+      "totalScore": 91,
+      "items": [
+        {
+          "category": "Role Match",
+          "points": 25,
+          "maxPoints": 25,
+          "matched": true,
+          "reason": "Matches target role: \"AI Engineer\""
+        },
+        {
+          "category": "Stack Match",
+          "points": 16,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Overlapping stack: Next.js, TypeScript, FastAPI, LLM/RAG"
+        },
+        {
+          "category": "Remote India",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Remote India or Worldwide eligible"
+        },
+        {
+          "category": "Experience Match",
+          "points": 15,
+          "maxPoints": 15,
+          "matched": true,
+          "reason": "Ideal alignment for 3+ years experience"
+        },
+        {
+          "category": "Founder / CTO / Decision Maker",
+          "points": 5,
+          "maxPoints": 10,
+          "matched": false,
+          "reason": "Team member or recruiter path"
+        },
+        {
+          "category": "Recent Hiring Signal",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Active hiring post or verified engineering opening"
+        }
+      ],
+      "strongMatches": [
+        "Next.js",
+        "TypeScript",
+        "FastAPI",
+        "LLM/RAG"
+      ],
+      "gaps": [
+        "LangGraph"
+      ],
+      "blockers": [],
+      "recommendedAction": "Recommended Outreach"
+    },
+    "draftedMessage": "Hi Priya, I saw the AI Engineer / Full Stack opening at ABC Technologies.\n\nI'm a Full Stack / AI Engineer with 3+ years of experience building scalable applications with React/Next.js, TypeScript, Python/FastAPI, PostgreSQL, and LLM/RAG pipelines. I've owned features end-to-end in fast-moving startup environments.\n\nIf you are open to a brief conversation or reviewing my profile, I'd welcome the opportunity to connect.\n\nBest,\nHemang",
+    "followUpDay5Message": "Hi Priya, wanted to quickly bump this in case it got buried. Still very keen on the AI Engineer / Full Stack opportunity at ABC Technologies. Happy to share a quick overview of recent projects or hop on a brief call whenever convenient for you.\n\nBest,\nHemang",
+    "followUpDay12Message": "Hi Priya, following up one last time regarding the AI Engineer / Full Stack role at ABC Technologies. I understand priorities shift quickly—if the timing isn't right now, no worries at all. Wishing you and the team continued success, and let's stay in touch!\n\nBest,\nHemang"
+  },
+  {
+    "id": "p-3",
+    "name": "Vikram Mehta",
+    "jobTitle": "CTO & Co-founder",
+    "company": "Nexus Scale",
+    "companyWebsite": "https://nexusscale.example.com",
+    "location": "Mumbai, India (Remote)",
+    "connectionDegree": "1st",
+    "headline": "CTO @ Nexus Scale | Seed Funded | Looking for Founding Engineer #3",
+    "notes": "Met at startup demo day. High ownership role with equity.",
+    "linkedinUrl": "https://linkedin.com/in/vikram-mehta-nexus",
+    "classification": "CTO",
+    "relationshipType": "CTO",
+    "status": "Not contacted",
+    "createdAt": "2026-09-24T09:15:00.000Z",
+    "updatedAt": "2026-09-24T09:15:00.000Z",
+    "jobOpportunity": {
+      "id": "j-3",
+      "title": "Founding Engineer (Full Stack / AI)",
+      "company": "Nexus Scale",
+      "url": "https://nexusscale.example.com/join-founding-team",
+      "location": "Remote India",
+      "remoteStatus": "Remote India",
+      "postedDate": "2026-09-24",
+      "description": "Looking for founding engineer with solid full-stack experience (Next.js, Python/FastAPI, Postgres, Docker). Direct ownership with founders.",
+      "source": "LinkedIn Announcement",
+      "hiringSignals": [
+        "We're looking for our first 5 engineers",
+        "Founding role"
+      ],
+      "requiredSkills": [
+        "Next.js",
+        "React",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "Docker"
+      ],
+      "minExperienceYears": 3
+    },
+    "score": {
+      "totalScore": 100,
+      "items": [
+        {
+          "category": "Role Match",
+          "points": 25,
+          "maxPoints": 25,
+          "matched": true,
+          "reason": "Matches target role: \"Founding Engineer\""
+        },
+        {
+          "category": "Stack Match",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Overlapping stack: Next.js, Python, FastAPI, PostgreSQL, Docker"
+        },
+        {
+          "category": "Remote India",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Remote India or Worldwide eligible"
+        },
+        {
+          "category": "Experience Match",
+          "points": 15,
+          "maxPoints": 15,
+          "matched": true,
+          "reason": "Ideal alignment for 3+ years experience"
+        },
+        {
+          "category": "Founder / CTO / Decision Maker",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "CTO with direct hiring influence"
+        },
+        {
+          "category": "Recent Hiring Signal",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Active hiring post or verified engineering opening"
+        }
+      ],
+      "strongMatches": [
+        "Next.js",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "Docker"
+      ],
+      "gaps": [],
+      "blockers": [],
+      "recommendedAction": "High Priority - Immediate Direct Outreach"
+    },
+    "draftedMessage": "Hi Vikram, I came across the Founding Engineer (Full Stack / AI) opportunity at Nexus Scale.\n\nI’m a Full Stack/AI Engineer with 3+ years of experience building production applications with React/Next.js, TypeScript, Python/FastAPI, PostgreSQL, and LLM/RAG workflows. I’ve worked in startup environments with strong end-to-end ownership and would love to explore whether my background could be relevant to the team.\n\nBest,\nHemang",
+    "followUpDay5Message": "Hi Vikram, wanted to quickly bump this in case it got buried. Still very keen on the Founding Engineer (Full Stack / AI) opportunity at Nexus Scale. Happy to share a quick overview of recent projects or hop on a brief call whenever convenient for you.\n\nBest,\nHemang",
+    "followUpDay12Message": "Hi Vikram, following up one last time regarding the Founding Engineer (Full Stack / AI) role at Nexus Scale. I understand priorities shift quickly—if the timing isn't right now, no worries at all. Wishing you and the team continued success, and let's stay in touch!\n\nBest,\nHemang"
+  },
+  {
+    "id": "p-4",
+    "name": "Ananya Roy",
+    "jobTitle": "Engineering Manager",
+    "company": "CloudPulse Systems",
+    "companyWebsite": "https://cloudpulse.example.com",
+    "location": "Bengaluru / Remote",
+    "connectionDegree": "2nd",
+    "headline": "Engineering Manager @ CloudPulse | Building modern cloud devtools",
+    "notes": "Ex-coworker from previous open source project.",
+    "linkedinUrl": "https://linkedin.com/in/ananya-roy-cloudpulse",
+    "classification": "Engineering Manager",
+    "relationshipType": "Engineering Manager",
+    "status": "Not contacted",
+    "createdAt": "2026-09-22T14:00:00.000Z",
+    "updatedAt": "2026-09-22T14:00:00.000Z",
+    "jobOpportunity": {
+      "id": "j-4",
+      "title": "Senior Software Engineer (Full Stack)",
+      "company": "CloudPulse Systems",
+      "url": "https://cloudpulse.example.com/careers/sr-fullstack",
+      "location": "Remote India",
+      "remoteStatus": "Remote India",
+      "postedDate": "2026-09-20",
+      "description": "Full stack development with Next.js, TypeScript, PostgreSQL and Kubernetes. Experience with CI/CD and cloud infra.",
+      "source": "Company Careers Page",
+      "hiringSignals": [
+        "Open engineering positions"
+      ],
+      "requiredSkills": [
+        "Next.js",
+        "TypeScript",
+        "PostgreSQL",
+        "Kubernetes",
+        "Docker"
+      ],
+      "minExperienceYears": 4
+    },
+    "score": {
+      "totalScore": 92,
+      "items": [
+        {
+          "category": "Role Match",
+          "points": 25,
+          "maxPoints": 25,
+          "matched": true,
+          "reason": "Matches target role: \"Software Engineer\""
+        },
+        {
+          "category": "Stack Match",
+          "points": 12,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Overlapping stack: Next.js, TypeScript, PostgreSQL"
+        },
+        {
+          "category": "Remote India",
+          "points": 20,
+          "maxPoints": 20,
+          "matched": true,
+          "reason": "Remote India or Worldwide eligible"
+        },
+        {
+          "category": "Experience Match",
+          "points": 15,
+          "maxPoints": 15,
+          "matched": true,
+          "reason": "Ideal alignment for 3+ years experience"
+        },
+        {
+          "category": "Founder / CTO / Decision Maker",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Engineering Manager with direct hiring influence"
+        },
+        {
+          "category": "Recent Hiring Signal",
+          "points": 10,
+          "maxPoints": 10,
+          "matched": true,
+          "reason": "Active hiring post or verified engineering opening"
+        }
+      ],
+      "strongMatches": [
+        "Next.js",
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "gaps": [
+        "Kubernetes"
+      ],
+      "blockers": [],
+      "recommendedAction": "High Priority - Immediate Direct Outreach"
+    },
+    "draftedMessage": "Hi Ananya, I came across the Senior Software Engineer (Full Stack) opportunity at CloudPulse Systems.\n\nI’m a Full Stack/AI Engineer with 3+ years of experience building production applications with React/Next.js, TypeScript, Python/FastAPI, PostgreSQL, and LLM/RAG workflows. I’ve worked in startup environments with strong end-to-end ownership and would love to explore whether my background could be relevant to the team.\n\nBest,\nHemang",
+    "followUpDay5Message": "Hi Ananya, wanted to quickly bump this in case it got buried. Still very keen on the Senior Software Engineer (Full Stack) opportunity at CloudPulse Systems. Happy to share a quick overview of recent projects or hop on a brief call whenever convenient for you.\n\nBest,\nHemang",
+    "followUpDay12Message": "Hi Ananya, following up one last time regarding the Senior Software Engineer (Full Stack) role at CloudPulse Systems. I understand priorities shift quickly—if the timing isn't right now, no worries at all. Wishing you and the team continued success, and let's stay in touch!\n\nBest,\nHemang"
+  }
+]
