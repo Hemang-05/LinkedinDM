@@ -7,17 +7,18 @@ import {
   appendClientOutreachLog,
   updateClientProspect
 } from '@/lib/clientStorage';
+import { generatePersonalizedDM, MessageAngle } from '@/lib/generator';
 import {
   X,
   Copy,
   Check,
   ExternalLink,
-  RefreshCw,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
   Send,
-  Info
+  Info,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface DMReviewModalProps {
@@ -31,9 +32,9 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
   const [message, setMessage] = useState(prospect.draftedMessage || '');
   const [activeTab, setActiveTab] = useState<'day0' | 'day5' | 'day12'>('day0');
+  const [selectedAngle, setSelectedAngle] = useState<MessageAngle>('standard');
   const [copied, setCopied] = useState(false);
   const [showScoreDetails, setShowScoreDetails] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Duplicate Check & Confirmation State
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -68,6 +69,17 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
     updateClientProspect(prospect.id, prospect.status, newVal);
   };
 
+  // Instant local angle switch (0ms latency, no AI API needed)
+  const handleSwitchAngle = (angle: MessageAngle) => {
+    setSelectedAngle(angle);
+    const generated = generatePersonalizedDM(prospect, prospect.jobOpportunity, angle);
+    let newMsg = generated.day0;
+    if (activeTab === 'day5') newMsg = generated.day5;
+    else if (activeTab === 'day12') newMsg = generated.day12;
+    setMessage(newMsg);
+    updateClientProspect(prospect.id, prospect.status, newMsg);
+  };
+
   // Copy to clipboard with native API
   const handleCopy = async () => {
     try {
@@ -85,63 +97,15 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // Regenerate with different angles
-  const handleRegenerate = async (angle?: string) => {
-    setIsRegenerating(true);
-    try {
-      const res = await fetch('/api/generate-dm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prospect,
-          job: prospect.jobOpportunity,
-          angle
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        let newMsg = data.day0;
-        if (activeTab === 'day5') newMsg = data.day5;
-        else if (activeTab === 'day12') newMsg = data.day12;
-        setMessage(newMsg);
-        updateClientProspect(prospect.id, prospect.status, newMsg);
-      }
-    } catch (err) {
-      console.error('Regeneration error:', err);
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
   // Initiate Mark as Contacted flow
   const handleInitiateContacted = async () => {
-    // 1. Check browser storage first
+    // Check browser storage
     const clientCheck = checkClientDuplicate(prospect.linkedinUrl, prospect.name, prospect.company);
     if (clientCheck.isDuplicate) {
       const contactDate = clientCheck.existingEntry?.date || prospect.lastContactedDate || 'recently';
       setDuplicateWarning(`Already contacted on ${contactDate}`);
       return;
     }
-
-    // 2. Try server check as additional verification if available
-    try {
-      const res = await fetch('/api/outreach-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'check',
-          linkedinUrl: prospect.linkedinUrl,
-          name: prospect.name,
-          company: prospect.company
-        })
-      });
-      const data = await res.json();
-      if (data.isDuplicate) {
-        const contactDate = data.existingEntry?.date || prospect.lastContactedDate || 'recently';
-        setDuplicateWarning(`Already contacted on ${contactDate}`);
-        return;
-      }
-    } catch {}
 
     setDuplicateWarning(null);
     setShowConfirmModal(true);
@@ -178,9 +142,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           ...logEntry
         })
       });
-    } catch (err) {
-      console.log('Server sync skipped (browser storage active):', err);
-    }
+    } catch {}
 
     setShowConfirmModal(false);
     setLogSuccess(true);
@@ -205,7 +167,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             <h2 className="text-sm font-semibold uppercase tracking-wider text-indigo-400">
               Outreach Review
             </h2>
-            <p className="text-xs text-slate-400">Personalized Human-in-the-Loop DM</p>
+            <p className="text-xs text-slate-400">Deterministic Personalized DM</p>
           </div>
           <button
             onClick={onClose}
@@ -369,6 +331,34 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             </button>
           </div>
 
+          {/* Section 4B: Message Angle Selector (Immediate 0ms Switch) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400">
+              <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
+              <span>Outreach Angle</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              {[
+                { id: 'standard' as MessageAngle, label: 'Standard / Adaptive' },
+                { id: 'founding' as MessageAngle, label: 'Founding 0→1 Ownership' },
+                { id: 'ai_rag' as MessageAngle, label: 'Full Stack AI / RAG' },
+                { id: 'product_ownership' as MessageAngle, label: 'Product & Autonomy' }
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSwitchAngle(opt.id)}
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-medium transition-all text-left truncate ${
+                    selectedAngle === opt.id
+                      ? 'bg-indigo-600/30 border border-indigo-500/50 text-indigo-300 font-semibold'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Section 5: The Message Textarea */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
@@ -387,31 +377,22 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             />
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleRegenerate()}
-              disabled={isRegenerating}
-              className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-200 text-xs font-medium border border-slate-800 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-              <span>Regenerate</span>
-            </button>
-
+          {/* Quick Action Button: Copy DM */}
+          <div>
             <button
               onClick={handleCopy}
-              className={`py-2.5 px-3 rounded-xl active:scale-95 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all ${
+              className={`w-full py-3 px-3 rounded-xl active:scale-[0.98] text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${
                 copied
                   ? 'bg-emerald-600 text-white'
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white'
               }`}
             >
-              {copied ? <Check className="w-4 h-4 stroke-[3px]" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied ✓' : 'Copy DM'}</span>
+              {copied ? <Check className="w-4 h-4 stroke-[3px]" /> : <Copy className="w-4 h-4" />}
+              <span>{copied ? 'Copied ✓' : 'Copy DM to Clipboard'}</span>
             </button>
           </div>
 
-          {/* LinkedIn Handoff */}
+          {/* Step 6: LinkedIn Handoff */}
           {copied && (
             <div className="p-3.5 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 text-xs space-y-2 animate-in fade-in duration-200">
               <div className="font-semibold text-indigo-200 flex items-center gap-1.5">
@@ -419,11 +400,11 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                 <span>DM copied. Open LinkedIn and send it.</span>
               </div>
               <p className="text-[11px] text-slate-300">
-                Open the recipient&apos;s LinkedIn page manually, paste your message, and hit send.
+                Open recipient&apos;s LinkedIn page manually, paste your message, and hit send.
               </p>
               <button
                 onClick={handleOpenLinkedIn}
-                className="w-full py-2 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full py-2.5 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center justify-center gap-1.5 transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Open LinkedIn Profile</span>
@@ -434,14 +415,14 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           {!copied && (
             <button
               onClick={handleOpenLinkedIn}
-              className="w-full py-2 rounded-xl bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 flex items-center justify-center gap-1.5 transition-colors"
+              className="w-full py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 flex items-center justify-center gap-1.5 transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
               <span>Open LinkedIn externally</span>
             </button>
           )}
 
-          {/* Primary Bottom Action */}
+          {/* Primary Bottom Action: Mark as Contacted */}
           <div className="pt-2">
             <button
               onClick={handleInitiateContacted}
