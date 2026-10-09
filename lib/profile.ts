@@ -1,7 +1,7 @@
 import { UserProfile } from '@/types';
 
-export const MY_PROFILE: UserProfile = {
-  name: 'Hemang',
+export const DEFAULT_PROFILE: UserProfile = {
+  name: 'Your Name',
   title: 'Full Stack / AI Engineer',
   yearsOfExperience: 3,
   skills: [
@@ -9,29 +9,26 @@ export const MY_PROFILE: UserProfile = {
     'Next.js',
     'TypeScript',
     'Python',
-    'FastAPI',
+    'Node.js',
     'PostgreSQL',
     'REST APIs',
-    'Docker',
     'Cloud / CI/CD',
-    'LLM integrations',
-    'RAG',
-    'AI agents / agentic workflows',
-    'Startup / founding-engineer experience',
-    'End-to-end product ownership'
+    'AI Integrations'
   ],
   targetRoles: [
     'Full Stack Engineer',
-    'Full Stack AI Engineer',
-    'AI Engineer',
     'Software Engineer',
+    'AI Engineer',
     'Product Engineer',
     'Founding Engineer'
   ],
   targetLocations: [
-    'Remote India',
-    'Remote worldwide (India eligible)'
+    'Remote',
+    'Hybrid / On-site'
   ],
   bioSummary:
-    'Full Stack and AI Engineer with 3+ years of production experience building high-scale applications with React, Next.js, TypeScript, Python/FastAPI, PostgreSQL, and agentic LLM/RAG architectures with founding-engineer ownership.'
+    'Experienced software engineer building web applications and AI-enabled products.'
 };
+
+// Fallback profile export
+export const MY_PROFILE = DEFAULT_PROFILE;

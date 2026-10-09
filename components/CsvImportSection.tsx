@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle2, Download } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, Download, HelpCircle, ArrowRight } from 'lucide-react';
 import { Prospect } from '@/types';
 
 interface CsvImportSectionProps {
   onImportComplete: (imported: Prospect[]) => void;
+  onOpenGuideModal: () => void;
 }
 
-export function CsvImportSection({ onImportComplete }: CsvImportSectionProps) {
+export function CsvImportSection({ onImportComplete, onOpenGuideModal }: CsvImportSectionProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -57,62 +58,79 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
       setErrorMsg('Failed to read or upload file');
     } finally {
       setIsUploading(false);
-      // Reset input
       e.target.value = '';
     }
   };
 
   return (
-    <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 space-y-4">
-      <div className="flex items-center justify-between">
+    <div id="csv-upload-section" className="bg-white border border-zinc-200/80 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Upload className="w-4 h-4 text-indigo-400" />
-            <span>CSV Batch Ingestion</span>
+          <h3 className="text-base font-bold text-zinc-900 flex items-center gap-2">
+            <Upload className="w-4 h-4 text-zinc-700" />
+            <span>Upload LinkedIn Connections CSV</span>
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Import legitimate LinkedIn connections or exported prospect lists.
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Drag and drop your LinkedIn CSV file to instantly generate targeted, high-converting messages.
           </p>
         </div>
 
         <button
           onClick={handleDownloadSample}
-          className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-lg"
+          className="self-start sm:self-auto text-xs text-zinc-700 hover:text-zinc-900 font-medium flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 px-3 py-1.5 rounded-xl transition-colors"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3.5 h-3.5 text-zinc-600" />
           <span>Sample CSV</span>
         </button>
       </div>
 
       {errorMsg && (
-        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
+        <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
           {errorMsg}
         </div>
       )}
 
       {successCount !== null && (
-        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>Successfully imported and scored {successCount} prospects!</span>
         </div>
       )}
 
-      <label className="border-2 border-dashed border-slate-800 hover:border-indigo-500/50 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40">
-        <FileText className="w-8 h-8 text-indigo-400 mb-2" />
-        <span className="text-xs font-semibold text-slate-200">
-          {isUploading ? 'Importing and scoring...' : 'Tap to choose CSV file'}
-        </span>
-        <span className="text-[10px] text-slate-500 mt-1">
-          Compatible with standard LinkedIn export columns
-        </span>
-        <input
-          type="file"
-          accept=".csv"
-          onChange={handleFileUpload}
-          disabled={isUploading}
-          className="hidden"
-        />
-      </label>
+      {/* iLovePDF-Style Dropzone */}
+      <div className="relative">
+        <label className="border-2 border-dashed border-zinc-300 hover:border-zinc-500 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-zinc-50/50 hover:bg-zinc-100/50 group">
+          <div className="w-12 h-12 rounded-full bg-zinc-200/80 group-hover:bg-zinc-300/80 flex items-center justify-center text-zinc-700 mb-3 transition-colors">
+            <FileText className="w-6 h-6" />
+          </div>
+          <span className="text-xs font-bold text-zinc-900">
+            {isUploading ? 'Ingesting & Scoring Connections...' : 'Select LinkedIn CSV file or drag here'}
+          </span>
+          <span className="text-[11px] text-zinc-500 mt-1">
+            Accepts standard Connections.csv export from LinkedIn
+          </span>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            disabled={isUploading}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {/* Helper text on bottom-left / bottom-right with link */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 px-1">
+        <button
+          onClick={onOpenGuideModal}
+          className="text-xs italic text-zinc-500 hover:text-zinc-900 flex items-center gap-1.5 transition-colors group"
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-700" />
+          <span>How to retrieve your LinkedIn Connections CSV file?</span>
+          <ArrowRight className="w-3 h-3 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+        </button>
+        <span className="text-[11px] text-zinc-400">100% Client-Side Privacy</span>
+      </div>
     </div>
   );
 }

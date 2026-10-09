@@ -1,23 +1,22 @@
-import { Prospect, OutreachLogEntry, OutreachStatus } from '@/types';
+import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile } from '@/types';
 import { INITIAL_PROSPECTS } from './sampleData';
+import { DEFAULT_PROFILE } from './profile';
 
-const PROSPECTS_STORAGE_KEY = 'jobhunt_prospects_v1';
-const OUTREACH_STORAGE_KEY = 'jobhunt_outreach_v1';
+const PROSPECTS_STORAGE_KEY = 'directmessage_prospects_v2';
+const OUTREACH_STORAGE_KEY = 'directmessage_outreach_v2';
+const PROFILE_STORAGE_KEY = 'directmessage_user_profile_v2';
 
 export function getClientProspects(): Prospect[] {
-  if (typeof window === 'undefined') return INITIAL_PROSPECTS;
+  if (typeof window === 'undefined') return [];
 
   try {
     const data = localStorage.getItem(PROSPECTS_STORAGE_KEY);
-    if (!data) {
-      localStorage.setItem(PROSPECTS_STORAGE_KEY, JSON.stringify(INITIAL_PROSPECTS));
-      return INITIAL_PROSPECTS;
-    }
+    if (!data) return [];
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PROSPECTS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Failed to read prospects from localStorage:', err);
-    return INITIAL_PROSPECTS;
+    return [];
   }
 }
 
@@ -66,7 +65,8 @@ export function getClientOutreachLogs(): OutreachLogEntry[] {
   try {
     const data = localStorage.getItem(OUTREACH_STORAGE_KEY);
     if (!data) return [];
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Failed to read outreach logs from localStorage:', err);
     return [];
@@ -79,6 +79,28 @@ export function saveClientOutreachLogs(logs: OutreachLogEntry[]): void {
     localStorage.setItem(OUTREACH_STORAGE_KEY, JSON.stringify(logs));
   } catch (err) {
     console.error('Failed to save outreach logs to localStorage:', err);
+  }
+}
+
+export function getClientProfile(): UserProfile {
+  if (typeof window === 'undefined') return DEFAULT_PROFILE;
+
+  try {
+    const data = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!data) return DEFAULT_PROFILE;
+    const parsed = JSON.parse(data);
+    return parsed && parsed.name ? parsed : DEFAULT_PROFILE;
+  } catch (err) {
+    return DEFAULT_PROFILE;
+  }
+}
+
+export function saveClientProfile(profile: UserProfile): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch (err) {
+    console.error('Failed to save profile to localStorage:', err);
   }
 }
 
@@ -180,7 +202,7 @@ Message Status: ${entry.status}
 export function downloadOutreachLogFile(): void {
   const text = generateOutreachLogText();
   if (!text) {
-    alert('No outreach history to export yet.');
+    alert('No outreach history logged yet.');
     return;
   }
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });

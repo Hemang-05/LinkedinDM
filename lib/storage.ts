@@ -1,25 +1,25 @@
 import fs from 'fs';
 import path from 'path';
 import { Prospect, OutreachStatus } from '@/types';
-import { INITIAL_PROSPECTS } from './sampleData';
 
 const DATA_FILE_PATH = path.join(process.cwd(), 'jobhunt_data.json');
 
 export function getStoredProspects(): Prospect[] {
   try {
     if (!fs.existsSync(DATA_FILE_PATH)) {
-      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(INITIAL_PROSPECTS, null, 2), 'utf8');
-      return INITIAL_PROSPECTS;
+      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify([], null, 2), 'utf8');
+      return [];
     }
     const raw = fs.readFileSync(DATA_FILE_PATH, 'utf8');
     if (!raw.trim()) {
-      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(INITIAL_PROSPECTS, null, 2), 'utf8');
-      return INITIAL_PROSPECTS;
+      fs.writeFileSync(DATA_FILE_PATH, JSON.stringify([], null, 2), 'utf8');
+      return [];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
-    console.error('Failed reading jobhunt_data.json, returning initial:', err);
-    return INITIAL_PROSPECTS;
+    console.error('Failed reading jobhunt_data.json:', err);
+    return [];
   }
 }
 

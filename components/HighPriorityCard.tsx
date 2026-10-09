@@ -15,28 +15,22 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
   const company = prospect.company;
   const classification = prospect.classification || 'Founder';
 
-  // Badge color based on match score
   const isTopMatch = matchScore >= 90;
 
   return (
-    <div className="touch-card bg-[#111827] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-lg shadow-black/20 flex flex-col justify-between relative overflow-hidden group">
-      {/* Glow highlight for top match */}
-      {isTopMatch && (
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-      )}
-
+    <div className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4.5 shadow-sm flex flex-col justify-between relative overflow-hidden group transition-all">
       <div>
         {/* Header row: Person & Match Badge */}
         <div className="flex items-start justify-between gap-3 mb-2.5">
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-white tracking-tight truncate group-hover:text-indigo-300 transition-colors">
+            <h3 className="text-base font-bold text-zinc-900 tracking-tight truncate group-hover:text-zinc-700 transition-colors">
               {prospect.name}
             </h3>
-            <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
-              <span className="font-medium text-slate-300">{classification}</span>
+            <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-0.5 truncate">
+              <span className="font-semibold text-zinc-700">{classification}</span>
               <span>·</span>
-              <span className="flex items-center gap-1 text-slate-400">
-                <Building2 className="w-3 h-3 text-slate-500 flex-shrink-0" />
+              <span className="flex items-center gap-1 text-zinc-500">
+                <Building2 className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
                 <span className="truncate">{company}</span>
               </span>
             </p>
@@ -45,27 +39,27 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
           {/* Match Score Badge */}
           <div className={`flex flex-col items-end flex-shrink-0 px-2.5 py-1 rounded-xl border ${
             isTopMatch
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-zinc-100 border-zinc-200 text-zinc-800'
           }`}>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Match</span>
-            <span className="text-sm font-extrabold tracking-tight leading-none mt-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Match</span>
+            <span className="text-sm font-black tracking-tight leading-none mt-0.5">
               {matchScore}%
             </span>
           </div>
         </div>
 
         {/* Hiring Opportunity */}
-        <div className="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800/80 mb-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-300 mb-1">
-            <Zap className="w-3 h-3 text-amber-400 flex-shrink-0" />
-            <span>Hiring</span>
+        <div className="bg-zinc-50 rounded-xl p-2.5 border border-zinc-200/80 mb-3">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-700 mb-1">
+            <Zap className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+            <span>Target Role</span>
           </div>
-          <p className="text-xs font-semibold text-slate-200 truncate">
+          <p className="text-xs font-bold text-zinc-900 truncate">
             {hiringRole}
           </p>
           {prospect.jobOpportunity?.location && (
-            <p className="text-[10px] text-slate-400 mt-0.5">
+            <p className="text-[10px] text-zinc-500 mt-0.5">
               {prospect.jobOpportunity.location} · {prospect.jobOpportunity.remoteStatus}
             </p>
           )}
@@ -77,13 +71,13 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
             {prospect.score.strongMatches.slice(0, 4).map((tech) => (
               <span
                 key={tech}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/50"
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200"
               >
                 ✓ {tech}
               </span>
             ))}
             {prospect.score.strongMatches.length > 4 && (
-              <span className="text-[10px] text-slate-500 py-0.5">
+              <span className="text-[10px] text-zinc-400 py-0.5">
                 +{prospect.score.strongMatches.length - 4} more
               </span>
             )}
@@ -91,14 +85,14 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
         )}
       </div>
 
-      {/* Primary Mobile CTA Button */}
+      {/* Primary CTA Button */}
       <button
         onClick={() => onReviewDM(prospect)}
-        className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all"
+        className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all"
       >
         <Sparkles className="w-3.5 h-3.5" />
         <span>Review DM</span>
-        <ChevronRight className="w-3.5 h-3.5 ml-auto text-indigo-200" />
+        <ChevronRight className="w-3.5 h-3.5 ml-auto text-zinc-400" />
       </button>
     </div>
   );

@@ -158,7 +158,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-[#0f172a] border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
+      <div className="bg-[#0f172a] border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-xl md:max-w-2xl max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
         <div className="w-12 h-1.5 bg-slate-700/80 rounded-full mx-auto mt-2.5 mb-1 sm:hidden" />
 
         {/* Modal Header */}
@@ -337,7 +337,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
               <span>Outreach Angle</span>
             </div>
-            <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
               {[
                 { id: 'standard' as MessageAngle, label: 'Standard / Adaptive' },
                 { id: 'founding' as MessageAngle, label: 'Founding 0→1 Ownership' },

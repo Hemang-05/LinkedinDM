@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Prospect, OutreachLogEntry, OutreachStatus } from '@/types';
-import { MY_PROFILE } from '@/lib/profile';
+import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile } from '@/types';
 import {
   getClientProspects,
   saveClientProspects,
@@ -10,7 +9,9 @@ import {
   saveClientOutreachLogs,
   addClientProspect,
   updateClientOutreachStatus,
-  downloadOutreachLogFile
+  downloadOutreachLogFile,
+  getClientProfile,
+  saveClientProfile
 } from '@/lib/clientStorage';
 import { Header } from '@/components/Header';
 import { BottomNav, NavTab } from '@/components/BottomNav';
@@ -20,6 +21,7 @@ import { DMReviewModal } from '@/components/DMReviewModal';
 import { OutreachHistoryCard } from '@/components/OutreachHistoryCard';
 import { ManualProspectModal } from '@/components/ManualProspectModal';
 import { CsvImportSection } from '@/components/CsvImportSection';
+import { LinkedInCsvGuideModal } from '@/components/LinkedInCsvGuideModal';
 import {
   Sparkles,
   Zap,
@@ -27,9 +29,14 @@ import {
   Users,
   Send,
   FileText,
-  AlertCircle,
   ChevronRight,
-  Download
+  Download,
+  Briefcase,
+  Target,
+  UserCheck,
+  Laptop,
+  Edit3,
+  Check
 } from 'lucide-react';
 
 export default function Home() {
@@ -37,10 +44,19 @@ export default function Home() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  // User profile state (editable per user)
+  const [userProfile, setUserProfile] = useState<UserProfile>(getClientProfile());
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState(userProfile.name);
+  const [editTitle, setEditTitle] = useState(userProfile.title);
+  const [editSkills, setEditSkills] = useState(userProfile.skills.join(', '));
 
   // Modals
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   // Filters for Prospects tab
   const [prospectFilter, setProspectFilter] = useState<string>('All');
@@ -49,7 +65,7 @@ export default function Home() {
   // Filters for Outreach tab
   const [outreachFilter, setOutreachFilter] = useState<string>('All');
 
-  // Load from browser storage immediately on client
+  // Load browser storage on client mount
   useEffect(() => {
     const localP = getClientProspects();
     setProspects(localP);
@@ -57,52 +73,43 @@ export default function Home() {
     const localLogs = getClientOutreachLogs();
     setOutreachLogs(localLogs);
 
-    // Optional background sync with server if available
-    fetch('/api/prospects')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.prospects && d.prospects.length > 0) {
-          // If browser has fewer items, merge
-          if (localP.length <= 4) {
-            setProspects(d.prospects);
-            saveClientProspects(d.prospects);
-          }
-        }
-      })
-      .catch(() => {});
-
-    fetch('/api/outreach-log')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.entries && d.entries.length > localLogs.length) {
-          setOutreachLogs(d.entries);
-          saveClientOutreachLogs(d.entries);
-        }
-      })
-      .catch(() => {});
+    const localProf = getClientProfile();
+    setUserProfile(localProf);
+    setEditName(localProf.name);
+    setEditTitle(localProf.title);
+    setEditSkills(localProf.skills.join(', '));
   }, []);
 
-  // Update a single prospect after review/contacted
+  const handleSaveProfile = () => {
+    const updatedSkills = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
+    const updated: UserProfile = {
+      ...userProfile,
+      name: editName || 'Your Name',
+      title: editTitle || 'Software Engineer',
+      skills: updatedSkills.length > 0 ? updatedSkills : userProfile.skills
+    };
+    setUserProfile(updated);
+    saveClientProfile(updated);
+    setIsEditingProfile(false);
+  };
+
   const handleProspectUpdated = (updated: Prospect) => {
     const updatedList = prospects.map((p) => (p.id === updated.id ? updated : p));
     setProspects(updatedList);
     saveClientProspects(updatedList);
     setSelectedProspect(updated);
 
-    // Reload logs from browser storage
     const updatedLogs = getClientOutreachLogs();
     setOutreachLogs(updatedLogs);
   };
 
-  // Add new prospect
   const handleProspectAdded = (newP: Prospect) => {
     addClientProspect(newP);
     const updated = [newP, ...prospects];
     setProspects(updated);
-    setSelectedProspect(newP); // Immediately open review
+    setSelectedProspect(newP);
   };
 
-  // Bulk import complete
   const handleCsvImportComplete = (imported: Prospect[]) => {
     const updated = [...imported, ...prospects];
     setProspects(updated);
@@ -110,13 +117,11 @@ export default function Home() {
     setCurrentTab('prospects');
   };
 
-  // Update status in outreach history
   const handleOutreachStatusChange = async (entry: OutreachLogEntry, newStatus: OutreachStatus) => {
     updateClientOutreachStatus(entry.linkedinUrl, entry.name, entry.company, newStatus);
     const updatedLogs = getClientOutreachLogs();
     setOutreachLogs(updatedLogs);
 
-    // Also update matching prospect if exists
     const updatedProspects = prospects.map((p) => {
       if (
         (entry.linkedinUrl && p.linkedinUrl === entry.linkedinUrl) ||
@@ -129,7 +134,6 @@ export default function Home() {
     setProspects(updatedProspects);
     saveClientProspects(updatedProspects);
 
-    // Try server sync
     try {
       await fetch('/api/outreach-log', {
         method: 'PUT',
@@ -142,6 +146,14 @@ export default function Home() {
         })
       });
     } catch {}
+  };
+
+  const scrollToCsvUpload = (catKey?: string) => {
+    if (catKey) setActiveCategory(catKey);
+    const el = document.getElementById('csv-upload-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   // Filtered Prospects
@@ -166,16 +178,11 @@ export default function Home() {
     });
   }, [prospects, searchQuery, prospectFilter, classificationFilter]);
 
-  // High Priority List (Top matches, uncontacted)
+  // High Priority List
   const highPriorityProspects = useMemo(() => {
     return prospects
       .filter((p) => (p.score?.totalScore || 0) >= 80 && p.status !== 'Contacted')
-      .slice(0, 5);
-  }, [prospects]);
-
-  // Follow-ups due
-  const followUpsDue = useMemo(() => {
-    return prospects.filter((p) => p.status === 'Follow-up due');
+      .slice(0, 6);
   }, [prospects]);
 
   // Outreach Filtered Logs
@@ -209,149 +216,169 @@ export default function Home() {
     return { total, highMatch, contacted, replied, conversion };
   }, [prospects, outreachLogs]);
 
+  // 4 Main Use-case tiles
+  const categoryTiles = [
+    {
+      id: 'job-hunt',
+      title: 'DM for Job Hunt',
+      subtitle: 'Target tech recruiters & hiring managers to land interviews.',
+      icon: Briefcase,
+      badge: 'Recruiters & Managers'
+    },
+    {
+      id: 'agency-leads',
+      title: 'DM for Agency Leads',
+      subtitle: 'Pitch B2B clients, founders & CXOs directly.',
+      icon: Target,
+      badge: 'Founders & Business'
+    },
+    {
+      id: 'hire',
+      title: 'DM to Hire',
+      subtitle: 'Message top engineering talent & key hires.',
+      icon: UserCheck,
+      badge: 'Candidates'
+    },
+    {
+      id: 'freelancers',
+      title: 'DM to Get Freelancers',
+      subtitle: 'Find verified contractors, agency partners & freelancers.',
+      icon: Laptop,
+      badge: 'Freelance & Contract'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col justify-between selection:bg-indigo-500/30">
-      <div className="w-full max-w-xl mx-auto flex-1 flex flex-col relative pb-20">
-        {/* Sticky Mobile Header */}
-        <Header
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onOpenQuickAdd={() => setIsQuickAddOpen(true)}
-        />
+    <div className="min-h-screen bg-[#f7f7f8] text-zinc-900 flex flex-col justify-between selection:bg-zinc-200">
+      {/* Fixed Header */}
+      <Header
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onOpenQuickAdd={() => setIsQuickAddOpen(false)}
+        onSelectCategoryNav={(catKey) => scrollToCsvUpload(catKey)}
+        pendingReviewCount={highPriorityProspects.length}
+        contactedCount={outreachLogs.length}
+      />
 
-        {/* Main Content Body */}
-        <main className="flex-1 p-4 space-y-5">
-          {/* TAB 1: HOME */}
+      <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col relative pb-20 md:pb-8 px-4 sm:px-6 lg:px-8 pt-6">
+        <main className="flex-1 space-y-6">
+          {/* TAB 1: HOME LANDING */}
           {currentTab === 'home' && (
-            <div className="space-y-5 animate-in fade-in duration-200">
-              {/* Quick Metrics Bar */}
-              <div className="grid grid-cols-4 gap-2">
-                <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5 text-center">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400 block">High Match</span>
-                  <span className="text-base font-black text-indigo-400 leading-tight">{metrics.highMatch}</span>
-                </div>
-                <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5 text-center">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400 block">Contacted</span>
-                  <span className="text-base font-black text-emerald-400 leading-tight">{metrics.contacted}</span>
-                </div>
-                <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5 text-center">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400 block">Replied</span>
-                  <span className="text-base font-black text-purple-400 leading-tight">{metrics.replied}</span>
-                </div>
-                <div className="bg-[#111827] border border-slate-800 rounded-xl p-2.5 text-center">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400 block">Conversion</span>
-                  <span className="text-base font-black text-amber-400 leading-tight">{metrics.conversion}%</span>
-                </div>
+            <div className="space-y-8 animate-in fade-in duration-200">
+              
+              {/* Hero Banner Header */}
+              <div className="text-center max-w-3xl mx-auto pt-2 pb-4 space-y-2.5">
+                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900">
+                  Every LinkedIn connection, one click away from a direct message.
+                </h1>
+                <p className="text-sm sm:text-base text-zinc-500 max-w-2xl mx-auto leading-relaxed">
+                  Upload your LinkedIn Connections CSV file and immediately generate tailored, human-sounding outreach for job hunting, agency leads, hiring, or freelancing.
+                </p>
               </div>
 
-              {/* HIGH PRIORITY SECTION */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                      High Priority Opportunities
-                    </h2>
-                  </div>
-                  <span className="text-[11px] text-slate-400">
-                    {highPriorityProspects.length} Ready
-                  </span>
-                </div>
-
-                {highPriorityProspects.length === 0 ? (
-                  <div className="bg-[#111827] border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">
-                    <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
-                    <p className="font-semibold text-slate-200">All high priority contacts addressed!</p>
-                    <p className="mt-1">Add new prospects or explore the Prospects tab.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {highPriorityProspects.map((prospect) => (
-                      <HighPriorityCard
-                        key={prospect.id}
-                        prospect={prospect}
-                        onReviewDM={(p) => setSelectedProspect(p)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Follow-up Due Section (if any) */}
-              {followUpsDue.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>Follow-ups Due Today</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {followUpsDue.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => setSelectedProspect(p)}
-                        className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between cursor-pointer"
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-white">{p.name}</p>
-                          <p className="text-[11px] text-slate-300">{p.company} · {p.jobTitle}</p>
+              {/* 4 Horizontal Rectangular Category Tiles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {categoryTiles.map((tile) => {
+                  const Icon = tile.icon;
+                  return (
+                    <div
+                      key={tile.id}
+                      onClick={() => scrollToCsvUpload(tile.id)}
+                      className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-5 shadow-sm cursor-pointer flex flex-col justify-between group transition-all"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-100 group-hover:bg-zinc-900 text-zinc-700 group-hover:text-white flex items-center justify-center transition-colors">
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md">
+                            {tile.badge}
+                          </span>
                         </div>
-                        <span className="text-xs font-semibold text-amber-300 flex items-center gap-1">
-                          Review Day 5 <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-900 group-hover:text-zinc-800">
+                            {tile.title}
+                          </h3>
+                          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                            {tile.subtitle}
+                          </p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
+                      <div className="pt-4 mt-2 flex items-center justify-between text-xs font-semibold text-zinc-900 border-t border-zinc-100">
+                        <span>Upload CSV & Message</span>
+                        <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* CSV Upload Dropzone Section */}
+              <div className="pt-2">
+                <CsvImportSection
+                  onImportComplete={handleCsvImportComplete}
+                  onOpenGuideModal={() => setIsGuideModalOpen(true)}
+                />
+              </div>
             </div>
           )}
 
           {/* TAB 2: PROSPECTS */}
           {currentTab === 'prospects' && (
-            <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-                {['All', 'Founder', 'CEO', 'CTO', 'Engineering Manager', 'Recruiter'].map((role) => (
-                  <button
-                    key={role}
-                    onClick={() => setClassificationFilter(role)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                      classificationFilter === role
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
-                    }`}
-                  >
-                    {role}
-                  </button>
-                ))}
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
+                  <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Role:</span>
+                  {['All', 'Founder', 'CEO', 'CTO', 'Engineering Manager', 'Recruiter'].map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => setClassificationFilter(role)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                        classificationFilter === role
+                          ? 'bg-zinc-900 text-white shadow-sm'
+                          : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
+                      }`}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
+                  <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Status:</span>
+                  {['All', 'Not contacted', 'Contacted', 'Replied'].map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setProspectFilter(st)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                        prospectFilter === st
+                          ? 'bg-zinc-800 text-white'
+                          : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-                {['All', 'Not contacted', 'Contacted', 'Replied'].map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => setProspectFilter(st)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                      prospectFilter === st
-                        ? 'bg-slate-700 text-white'
-                        : 'bg-slate-900/60 text-slate-500 border border-slate-800'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-[11px] text-slate-400 flex items-center justify-between px-1">
-                <span>Showing {filteredProspects.length} prospects</span>
+              <div className="text-xs text-zinc-500 flex items-center justify-between px-1">
+                <span>Showing <strong className="text-zinc-900">{filteredProspects.length}</strong> prospects</span>
                 <span>Sorted by Match %</span>
               </div>
 
               {filteredProspects.length === 0 ? (
-                <div className="bg-[#111827] border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-400">
-                  <p>No prospects found matching your search or filters.</p>
+                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-sm space-y-2">
+                  <p className="font-bold text-zinc-900 text-sm">No prospects in your list yet</p>
+                  <p className="text-xs text-zinc-500">
+                    Upload your LinkedIn Connections CSV file on the Home tab to import your contacts.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredProspects.map((prospect) => (
                     <ProspectCard
                       key={prospect.id}
@@ -366,106 +393,120 @@ export default function Home() {
 
           {/* TAB 3: JOBS */}
           {currentTab === 'jobs' && (
-            <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  Detected Engineering Openings
-                </h2>
-                <span className="text-[11px] text-slate-400">
-                  Remote India & Worldwide Eligible
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+                <div>
+                  <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
+                    Detected Opportunities & Roles
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Hiring positions identified from your connection profile data
+                  </p>
+                </div>
+                <span className="text-xs font-bold px-3 py-1 rounded-xl bg-zinc-100 text-zinc-800 border border-zinc-200">
+                  {prospects.filter((p) => Boolean(p.jobOpportunity)).length} Roles Detected
                 </span>
               </div>
 
-              <div className="space-y-3">
-                {prospects
-                  .filter((p) => Boolean(p.jobOpportunity))
-                  .map((p) => {
-                    const job = p.jobOpportunity!;
-                    return (
-                      <div
-                        key={job.id}
-                        className="bg-[#111827] border border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              {job.remoteStatus}
-                            </span>
-                            <h3 className="text-sm font-bold text-white mt-1.5">{job.title}</h3>
-                            <p className="text-xs text-slate-400">{job.company} · {job.location}</p>
+              {prospects.filter((p) => Boolean(p.jobOpportunity)).length === 0 ? (
+                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-sm space-y-2">
+                  <p className="font-bold text-zinc-900">No open hiring opportunities detected yet.</p>
+                  <p className="text-xs text-zinc-500">Import your LinkedIn connections CSV to detect hiring signals.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {prospects
+                    .filter((p) => Boolean(p.jobOpportunity))
+                    .map((p) => {
+                      const job = p.jobOpportunity!;
+                      return (
+                        <div
+                          key={job.id}
+                          className="bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between transition-all"
+                        >
+                          <div className="space-y-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  {job.remoteStatus}
+                                </span>
+                                <h3 className="text-sm font-bold text-zinc-900 mt-1.5">{job.title}</h3>
+                                <p className="text-xs text-zinc-500">{job.company} · {job.location}</p>
+                              </div>
+
+                              <div className="text-right flex-shrink-0">
+                                <span className="text-base font-black text-zinc-900">
+                                  {p.score?.totalScore}%
+                                </span>
+                                <span className="text-[10px] text-zinc-400 block">Match</span>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-zinc-600 line-clamp-3 leading-relaxed">
+                              {job.description}
+                            </p>
+
+                            {job.hiringSignals && job.hiringSignals.length > 0 && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200">
+                                <Zap className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                                <span>Signal: {job.hiringSignals.join(', ')}</span>
+                              </div>
+                            )}
                           </div>
 
-                          <div className="text-right">
-                            <span className="text-sm font-black text-indigo-400">
-                              {p.score?.totalScore}%
+                          <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-zinc-500 truncate">
+                              Via {p.name} ({p.classification})
                             </span>
-                            <span className="text-[10px] text-slate-500 block">Match</span>
+
+                            <button
+                              onClick={() => setSelectedProspect(p)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white flex items-center gap-1 transition-colors flex-shrink-0"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>Review DM</span>
+                            </button>
                           </div>
                         </div>
-
-                        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                          {job.description}
-                        </p>
-
-                        {job.hiringSignals && job.hiringSignals.length > 0 && (
-                          <div className="flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
-                            <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                            <span>Signal: {job.hiringSignals.join(', ')}</span>
-                          </div>
-                        )}
-
-                        <div className="pt-1 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-400">
-                            Via {p.name} ({p.classification})
-                          </span>
-
-                          <button
-                            onClick={() => setSelectedProspect(p)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            <span>Review DM</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           )}
 
-          {/* TAB 4: OUTREACH CRM & LOGS */}
+          {/* TAB 4: OUTREACH CRM */}
           {currentTab === 'outreach' && (
-            <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
                 <div>
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
                     Outreach CRM & History
                   </h2>
-                  <p className="text-[10px] text-slate-400">
-                    Browser storage + formatted export
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Browser storage synced + download activity log
                   </p>
                 </div>
 
                 <button
                   onClick={downloadOutreachLogFile}
-                  className="flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1.5 rounded-xl transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 px-3.5 py-2 rounded-xl transition-colors w-fit"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Log</span>
+                  <Download className="w-4 h-4 text-zinc-700" />
+                  <span>Download outreach_log.txt</span>
                 </button>
               </div>
 
-              {/* Horizontal Filter Chips */}
+              {/* Filter Chips */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
                 {['All', 'Contacted', 'Replied', 'Follow-up', 'Interview'].map((chip) => (
                   <button
                     key={chip}
                     onClick={() => setOutreachFilter(chip)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
                       outreachFilter === chip
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                        ? 'bg-zinc-900 text-white shadow-sm'
+                        : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
                     }`}
                   >
                     {chip}
@@ -473,15 +514,14 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* History Cards */}
               {filteredOutreachLogs.length === 0 ? (
-                <div className="bg-[#111827] border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-400">
-                  <Send className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="font-semibold text-slate-300">No outreach history records yet.</p>
-                  <p className="mt-1">Review high-priority prospects on Home to generate and send your first DM.</p>
+                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-sm space-y-2">
+                  <Send className="w-10 h-10 text-zinc-300 mx-auto" />
+                  <p className="font-bold text-zinc-900">No outreach history logged yet.</p>
+                  <p className="text-xs text-zinc-500">When you send or copy DMs to your contacts, your activity log will appear here.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredOutreachLogs.map((entry, index) => (
                     <OutreachHistoryCard
                       key={index}
@@ -496,81 +536,125 @@ export default function Home() {
 
           {/* TAB 5: SETTINGS */}
           {currentTab === 'settings' && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              {/* Profile Card */}
-              <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Users className="w-4 h-4 text-indigo-400" />
-                    <span>Active Profile Config</span>
-                  </h3>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
-                    3+ Years Exp
-                  </span>
-                </div>
-
-                <div className="text-xs space-y-1.5 text-slate-300">
-                  <p><span className="text-slate-500 font-medium">Candidate: </span>{MY_PROFILE.name} ({MY_PROFILE.title})</p>
-                  <p><span className="text-slate-500 font-medium">Target Roles: </span>{MY_PROFILE.targetRoles.join(', ')}</p>
-                  <p><span className="text-slate-500 font-medium">Locations: </span>{MY_PROFILE.targetLocations.join(', ')}</p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                    Matching Core Skills
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {MY_PROFILE.skills.map((s, idx) => (
-                      <span key={idx} className="text-[10px] bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-800">
-                        {s}
-                      </span>
-                    ))}
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Editable Profile Card */}
+                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                    <h3 className="text-sm sm:text-base font-bold text-zinc-900 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-zinc-700" />
+                      <span>Candidate / User Profile</span>
+                    </h3>
+                    <button
+                      onClick={() => {
+                        if (isEditingProfile) handleSaveProfile();
+                        else setIsEditingProfile(true);
+                      }}
+                      className="text-xs font-semibold px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white flex items-center gap-1 transition-colors"
+                    >
+                      {isEditingProfile ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit Profile</span>
+                        </>
+                      )}
+                    </button>
                   </div>
+
+                  {isEditingProfile ? (
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="block text-zinc-500 font-medium mb-1">Your Name</label>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-500 font-medium mb-1">Professional Title</label>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-500 font-medium mb-1">Key Skills (comma separated)</label>
+                        <input
+                          type="text"
+                          value={editSkills}
+                          onChange={(e) => setEditSkills(e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs sm:text-sm space-y-2 text-zinc-700">
+                      <p><span className="text-zinc-400 font-medium">Name: </span><strong className="text-zinc-900">{userProfile.name}</strong></p>
+                      <p><span className="text-zinc-400 font-medium">Title: </span>{userProfile.title}</p>
+                      <p><span className="text-zinc-400 font-medium">Target Roles: </span>{userProfile.targetRoles.join(', ')}</p>
+                      <div className="pt-2 border-t border-zinc-100">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
+                          Your Technical Skills
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {userProfile.skills.map((s, idx) => (
+                            <span key={idx} className="text-xs bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-lg border border-zinc-200">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Storage & Export Card */}
+                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 flex flex-col justify-between shadow-sm">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                      <h3 className="text-sm sm:text-base font-bold text-zinc-900 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        <span>Client Storage & Exports</span>
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        {outreachLogs.length} Logged
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      All your prospect data and outreach activity logs are stored securely in your individual browser local storage. Download the formatted <code className="text-zinc-800 font-mono">outreach_log.txt</code> file anytime.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={downloadOutreachLogFile}
+                    className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download outreach_log.txt</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Outreach Log Export Card */}
-              <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                    <span>Outreach Log (Browser Storage)</span>
-                  </h3>
-                  <span className="text-xs font-bold text-emerald-400">
-                    {outreachLogs.length} Logged
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Saved securely in your browser storage. You can download the exact <code className="text-indigo-300">outreach_log.txt</code> formatted file anytime to your device.
-                </p>
-
-                <button
-                  onClick={downloadOutreachLogFile}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download outreach_log.txt</span>
-                </button>
-              </div>
-
-              {/* CSV Import */}
-              <CsvImportSection onImportComplete={handleCsvImportComplete} />
-
-              {/* PWA Mobile Installation Hint */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-xs space-y-2">
-                <span className="font-bold text-indigo-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Install on Mobile Home Screen</span>
-                </span>
-                <p className="text-slate-400 leading-relaxed">
-                  Open this page in Chrome or Safari on your phone, tap <strong>Share</strong> or the <strong>Three Dots</strong> menu, and select <strong>&quot;Add to Home Screen&quot;</strong> to use it as a standalone app!
-                </p>
-              </div>
+              <CsvImportSection
+                onImportComplete={handleCsvImportComplete}
+                onOpenGuideModal={() => setIsGuideModalOpen(true)}
+              />
             </div>
           )}
         </main>
 
-        {/* Sticky Mobile Bottom Navigation */}
+        {/* Mobile Bottom Navigation */}
         <BottomNav
           currentTab={currentTab}
           onTabChange={setCurrentTab}
@@ -578,7 +662,7 @@ export default function Home() {
           contactedCount={outreachLogs.length}
         />
 
-        {/* The Most Important Screen: DM Review Modal */}
+        {/* DM Review Modal */}
         <DMReviewModal
           prospect={selectedProspect}
           onClose={() => setSelectedProspect(null)}
@@ -590,6 +674,12 @@ export default function Home() {
           isOpen={isQuickAddOpen}
           onClose={() => setIsQuickAddOpen(false)}
           onProspectAdded={handleProspectAdded}
+        />
+
+        {/* LinkedIn CSV Step-by-Step Guide Modal */}
+        <LinkedInCsvGuideModal
+          isOpen={isGuideModalOpen}
+          onClose={() => setIsGuideModalOpen(false)}
         />
       </div>
     </div>
