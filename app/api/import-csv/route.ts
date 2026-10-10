@@ -13,60 +13,93 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
     }
 
-    const lines = csvContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) {
       return NextResponse.json({ success: false, error: 'CSV file contains no records' }, { status: 400 });
     }
 
-    // Parse header
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    
-    // Header index lookups
-    const firstNameIdx = headers.findIndex(h => h.includes('first name') || h === 'first');
-    const lastNameIdx = headers.findIndex(h => h.includes('last name') || h === 'last');
-    const nameIdx = headers.findIndex(h => h === 'name' || h === 'full name');
-    const titleIdx = headers.findIndex(h => h.includes('title') || h.includes('position') || h.includes('role') || h.includes('occupation'));
-    const companyIdx = headers.findIndex(h => h.includes('company') || h.includes('organization'));
-    const urlIdx = headers.findIndex(h => h.includes('url') || h.includes('linkedin') || h.includes('profile'));
-    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('e-mail') || h.includes('mail'));
-    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
-    const connectedOnIdx = headers.findIndex(h => h.includes('connected') || h.includes('date'));
-    const locationIdx = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
-    const notesIdx = headers.findIndex(h => h.includes('note') || h.includes('headline') || h.includes('about') || h.includes('summary'));
+    // LinkedIn exports start with notes/preamble. Dynamically find the real header line.
+    let headerLineIdx = -1;
+    for (let i = 0; i < Math.min(lines.length, 25); i++) {
+      const lower = lines[i].toLowerCase();
+      if (
+        (lower.includes('first name') || lower.includes('url')) &&
+        (lower.includes('company') || lower.includes('position') || lower.includes('title'))
+      ) {
+        headerLineIdx = i;
+        break;
+      }
+    }
+
+    // Fallback to first line if no header match found
+    if (headerLineIdx === -1) {
+      headerLineIdx = 0;
+    }
+
+    // Parse header row
+    const headers = parseCSVLine(lines[headerLineIdx]).map((h) => h.toLowerCase().trim());
+
+    // Precise header index lookups
+    const firstNameIdx = headers.findIndex((h) => h.includes('first name') || h === 'first');
+    const lastNameIdx = headers.findIndex((h) => h.includes('last name') || h === 'last');
+    const nameIdx = headers.findIndex((h) => h === 'name' || h === 'full name');
+    const urlIdx = headers.findIndex((h) => h === 'url' || h.includes('url') || h.includes('linkedin') || h.includes('profile'));
+    const emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('e-mail') || h.includes('mail'));
+    const phoneIdx = headers.findIndex((h) => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
+    const companyIdx = headers.findIndex((h) => h.includes('company') || h.includes('organization') || h.includes('employer'));
+    const positionIdx = headers.findIndex((h) => h.includes('position') || h.includes('title') || h.includes('role') || h.includes('occupation'));
+    const locationIdx = headers.findIndex((h) => h.includes('location') || h.includes('city') || h.includes('country'));
+    const connectedOnIdx = headers.findIndex((h) => h.includes('connected') || h.includes('date'));
+    const notesIdx = headers.findIndex((h) => h.includes('note') || h.includes('headline') || h.includes('about') || h.includes('summary'));
 
     const imported: Prospect[] = [];
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = parseCSVLine(lines[i]);
+    // Parse data rows starting after header row
+    for (let i = headerLineIdx + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const cols = parseCSVLine(line);
       if (cols.length === 0) continue;
 
-      let name = '';
-      if (nameIdx !== -1 && cols[nameIdx]) {
-        name = cols[nameIdx];
-      } else if (firstNameIdx !== -1) {
-        name = `${cols[firstNameIdx] || ''} ${lastNameIdx !== -1 ? cols[lastNameIdx] || '' : ''}`.trim();
+      // Extract Name
+      let fullName = '';
+      const firstName = firstNameIdx !== -1 ? cols[firstNameIdx]?.trim() || '' : '';
+      const lastName = lastNameIdx !== -1 ? cols[lastNameIdx]?.trim() || '' : '';
+
+      if (firstName || lastName) {
+        // Clean up standalone dots or symbols
+        const cleanLast = lastName === '.' || lastName === '-' ? '' : lastName;
+        fullName = `${firstName} ${cleanLast}`.trim();
+      } else if (nameIdx !== -1 && cols[nameIdx]) {
+        fullName = cols[nameIdx].trim();
       }
 
-      const jobTitle = titleIdx !== -1 ? cols[titleIdx] || 'Engineer' : 'Engineer';
-      const company = companyIdx !== -1 ? cols[companyIdx] || 'Startup' : 'Startup';
-      const linkedinUrl = urlIdx !== -1 ? cols[urlIdx] || '' : '';
-      const email = emailIdx !== -1 ? cols[emailIdx]?.trim() || undefined : undefined;
-      const phoneNumber = phoneIdx !== -1 ? cols[phoneIdx]?.trim() || undefined : undefined;
-      const connectedOn = connectedOnIdx !== -1 ? cols[connectedOnIdx]?.trim() || undefined : undefined;
-      const location = locationIdx !== -1 ? cols[locationIdx] || 'Remote India' : 'Remote India';
-      const notes = notesIdx !== -1 ? cols[notesIdx] || '' : '';
+      // Skip empty or deleted connection rows (like ",,,,,,07 Sep 2026")
+      if (!fullName || fullName === '.' || fullName === '-' || fullName.length < 2) {
+        continue;
+      }
 
-      if (!name && !company) continue;
+      const jobTitle = positionIdx !== -1 && cols[positionIdx]?.trim() ? cols[positionIdx].trim() : 'Professional';
+      const company = companyIdx !== -1 && cols[companyIdx]?.trim() ? cols[companyIdx].trim() : 'Self-employed';
+      const linkedinUrl = urlIdx !== -1 && cols[urlIdx]?.trim()
+        ? cols[urlIdx].trim()
+        : `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(fullName + ' ' + company)}`;
+      const email = emailIdx !== -1 && cols[emailIdx]?.trim() ? cols[emailIdx].trim() : undefined;
+      const phoneNumber = phoneIdx !== -1 && cols[phoneIdx]?.trim() ? cols[phoneIdx].trim() : undefined;
+      const connectedOn = connectedOnIdx !== -1 && cols[connectedOnIdx]?.trim() ? cols[connectedOnIdx].trim() : undefined;
+      const location = locationIdx !== -1 && cols[locationIdx]?.trim() ? cols[locationIdx].trim() : 'Remote';
+      const notes = notesIdx !== -1 && cols[notesIdx]?.trim() ? cols[notesIdx].trim() : '';
 
       const { classification, relationshipType, segregationGroup } = classifyProspectTitle(jobTitle, notes);
 
       const prospect: Prospect = {
         id: `p-csv-${Date.now()}-${i}`,
-        name: name || 'Prospect',
+        name: fullName,
         jobTitle,
         company,
         location,
-        linkedinUrl: linkedinUrl || `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(name + ' ' + company)}`,
+        linkedinUrl,
         email: email || undefined,
         phoneNumber: phoneNumber || undefined,
         connectedOn: connectedOn || undefined,
@@ -79,13 +112,13 @@ export async function POST(request: Request) {
         updatedAt: new Date().toISOString(),
         jobOpportunity: {
           id: `j-csv-${i}`,
-          title: jobTitle.toLowerCase().includes('engineer') ? jobTitle : 'Full Stack AI Engineer',
+          title: jobTitle,
           company,
           location,
           remoteStatus: 'Remote India',
-          description: notes || `Hiring opportunities at ${company}`,
-          source: 'CSV Ingestion',
-          hiringSignals: notes.toLowerCase().includes('hiring') ? ["We're hiring"] : [],
+          description: `Connection at ${company} with title ${jobTitle}`,
+          source: 'LinkedIn CSV Import',
+          hiringSignals: jobTitle.toLowerCase().includes('hiring') || notes.toLowerCase().includes('hiring') ? ["Hiring Lead"] : [],
           requiredSkills: ['React', 'Next.js', 'Python', 'FastAPI', 'PostgreSQL'],
           minExperienceYears: 3
         }
@@ -97,7 +130,6 @@ export async function POST(request: Request) {
       prospect.followUpDay5Message = messages.day5;
       prospect.followUpDay12Message = messages.day12;
 
-      addProspect(prospect);
       imported.push(prospect);
     }
 
