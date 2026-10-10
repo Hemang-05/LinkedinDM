@@ -69,10 +69,29 @@ export default function Home() {
   // Filters for Outreach tab
   const [outreachFilter, setOutreachFilter] = useState<string>('All');
 
-  // Load browser storage on client mount
+  // Load browser storage on client mount with automatic deduplication
   useEffect(() => {
     const localP = getClientProspects();
-    setProspects(localP);
+    const seen = new Set<string>();
+    const cleaned: Prospect[] = [];
+
+    for (const p of localP) {
+      // Remove any old failed parse records
+      if (p.name === 'Prospect' && (p.company === 'Startup' || p.jobTitle === 'Engineer')) {
+        continue;
+      }
+      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
+        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
+        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleaned.push(p);
+      }
+    }
+
+    setProspects(cleaned);
+    saveClientProspects(cleaned);
 
     const localLogs = getClientOutreachLogs();
     setOutreachLogs(localLogs);
@@ -115,16 +134,37 @@ export default function Home() {
   };
 
   const handleCsvImportComplete = (imported: Prospect[]) => {
-    const updated = [...imported, ...prospects];
-    setProspects(updated);
-    saveClientProspects(updated);
+    const seen = new Set<string>();
+    const cleaned: Prospect[] = [];
+    for (const p of [...imported, ...prospects]) {
+      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
+        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
+        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleaned.push(p);
+      }
+    }
+    setProspects(cleaned);
+    saveClientProspects(cleaned);
     setCurrentTab('prospects');
   };
 
   const handleWorkflowImportComplete = (imported: Prospect[]) => {
-    const updated = [...imported, ...prospects];
-    setProspects(updated);
-    saveClientProspects(updated);
+    // Deduplicate fresh import
+    const seen = new Set<string>();
+    const cleaned: Prospect[] = [];
+    for (const p of imported) {
+      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
+        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
+        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleaned.push(p);
+      }
+    }
+    setProspects(cleaned);
+    saveClientProspects(cleaned);
     setWorkflowStep('segregated');
   };
 
@@ -300,6 +340,11 @@ export default function Home() {
                   workflow={selectedWorkflow}
                   prospects={prospects}
                   onBack={() => setWorkflowStep('upload')}
+                  onReset={() => {
+                    setProspects([]);
+                    saveClientProspects([]);
+                    setWorkflowStep('upload');
+                  }}
                   onReviewDM={(p) => setSelectedProspect(p)}
                 />
               )}

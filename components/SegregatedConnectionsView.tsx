@@ -26,6 +26,7 @@ interface SegregatedConnectionsViewProps {
   workflow: WorkflowType;
   prospects: Prospect[];
   onBack: () => void;
+  onReset?: () => void;
   onReviewDM: (prospect: Prospect) => void;
 }
 
@@ -33,6 +34,7 @@ export function SegregatedConnectionsView({
   workflow,
   prospects,
   onBack,
+  onReset,
   onReviewDM
 }: SegregatedConnectionsViewProps) {
   const [activeGroup, setActiveGroup] = useState<'All' | SegregationGroup>('All');
@@ -137,9 +139,19 @@ export function SegregatedConnectionsView({
           <span>Upload New Files / Change Mode</span>
         </button>
 
-        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 w-fit">
-          {meta.badge} · {stats.total} Total Connections
-        </span>
+        <div className="flex items-center gap-2">
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2.5 rounded-lg transition-colors"
+            >
+              <span>Reset & Re-upload</span>
+            </button>
+          )}
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-zinc-100 text-zinc-800 border border-zinc-200 w-fit">
+            {meta.badge} · {stats.total} Total Connections
+          </span>
+        </div>
       </div>
 
       {/* Header card with summary breakdown */}
