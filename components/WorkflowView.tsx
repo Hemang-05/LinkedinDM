@@ -41,6 +41,7 @@ export function WorkflowView({
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  const [skippedStudents, setSkippedStudents] = useState(0);
 
   const getWorkflowMeta = () => {
     switch (workflow) {
@@ -112,20 +113,17 @@ export function WorkflowView({
     setSuccessCount(null);
 
     try {
-      const text = await csvFile.text();
-      const res = await fetch('/api/import-csv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          csvContent: text,
-          workflow,
-          targetSector: targetSector || undefined
-        })
-      });
+      const form = new FormData();
+      form.append('file', csvFile);
+      form.append('workflow', workflow);
+      if (targetSector) form.append('targetSector', targetSector);
+
+      const res = await fetch('/api/import-csv', { method: 'POST', body: form });
 
       const data = await res.json();
       if (data.success) {
         setSuccessCount(data.count);
+        setSkippedStudents(data.skippedStudents || 0);
         setTimeout(() => {
           onImportComplete(data.prospects);
         }, 500);
@@ -175,7 +173,10 @@ export function WorkflowView({
       {successCount !== null && (
         <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Successfully processed {successCount} connections! Navigating to segregated view...</span>
+          <span>
+            Successfully processed {successCount} connections
+            {skippedStudents > 0 ? ` (${skippedStudents} students/interns filtered out)` : ''}! Navigating to segregated view...
+          </span>
         </div>
       )}
 

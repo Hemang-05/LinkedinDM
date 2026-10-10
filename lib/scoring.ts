@@ -1,6 +1,19 @@
 import { Prospect, JobOpportunity, ScoreExplanation, ScoreBreakdownItem } from '@/types';
 import { MY_PROFILE } from './profile';
 
+// Built once at module load (previously rebuilt on every call)
+const KNOWN_PROFILE_SKILLS = [
+  { name: 'React', patterns: ['react'] },
+  { name: 'Next.js', patterns: ['next.js', 'nextjs'] },
+  { name: 'TypeScript', patterns: ['typescript', 'ts'] },
+  { name: 'Python', patterns: ['python'] },
+  { name: 'FastAPI', patterns: ['fastapi'] },
+  { name: 'PostgreSQL', patterns: ['postgresql', 'postgres'] },
+  { name: 'LLM/RAG', patterns: ['llm', 'rag', 'genai', 'langchain', 'openai', 'agents'] },
+  { name: 'Docker', patterns: ['docker', 'containers'] }
+] as const;
+const TARGET_ROLES_LOWER = MY_PROFILE.targetRoles.map((r) => ({ raw: r, lower: r.toLowerCase() }));
+
 export function calculateScoreAndMatching(
   prospect: Partial<Prospect>,
   job?: JobOpportunity
@@ -18,10 +31,10 @@ export function calculateScoreAndMatching(
   // 1. Role Match (+25 points)
   let roleMatch = false;
   let roleReason = 'Target role mismatch';
-  for (const targetRole of MY_PROFILE.targetRoles) {
-    if (roleText.includes(targetRole.toLowerCase())) {
+  for (const targetRole of TARGET_ROLES_LOWER) {
+    if (roleText.includes(targetRole.lower)) {
       roleMatch = true;
-      roleReason = `Matches target role: "${targetRole}"`;
+      roleReason = `Matches target role: "${targetRole.raw}"`;
       break;
     }
   }
@@ -39,16 +52,7 @@ export function calculateScoreAndMatching(
 
   // 2. Stack Match (+20 points)
   const stackMatches: string[] = [];
-  const knownProfileSkills = [
-    { name: 'React', patterns: ['react'] },
-    { name: 'Next.js', patterns: ['next.js', 'nextjs'] },
-    { name: 'TypeScript', patterns: ['typescript', 'ts'] },
-    { name: 'Python', patterns: ['python'] },
-    { name: 'FastAPI', patterns: ['fastapi'] },
-    { name: 'PostgreSQL', patterns: ['postgresql', 'postgres'] },
-    { name: 'LLM/RAG', patterns: ['llm', 'rag', 'genai', 'langchain', 'openai', 'agents'] },
-    { name: 'Docker', patterns: ['docker', 'containers'] }
-  ];
+  const knownProfileSkills = KNOWN_PROFILE_SKILLS;
 
   for (const skill of knownProfileSkills) {
     if (skill.patterns.some(p => descText.includes(p) || roleText.includes(p))) {

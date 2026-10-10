@@ -1,175 +1,273 @@
 import { NextResponse } from 'next/server';
-import { addProspect } from '@/lib/storage';
-import { classifyProspectTitle } from '@/lib/classifier';
+import { classifyProspectTitle, isStudentOrIntern, ClassificationResult } from '@/lib/classifier';
 import { calculateScoreAndMatching } from '@/lib/scoring';
-import { generatePersonalizedDM } from '@/lib/generator';
-import { Prospect } from '@/types';
+import { Prospect, ScoreExplanation } from '@/types';
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const REQUIRED_SKILLS = ['React', 'Next.js', 'Python', 'FastAPI', 'PostgreSQL'];
+
+// Exact header names first (LinkedIn's export uses these), fuzzy fallback only if missing.
+const ALIASES: Record<string, string[]> = {
+  firstName: ['first name', 'first', 'firstname'],
+  lastName: ['last name', 'last', 'lastname'],
+  fullName: ['name', 'full name'],
+  url: ['url', 'profile url', 'linkedin url', 'linkedin'],
+  email: ['email address', 'email', 'e-mail'],
+  phone: ['phone', 'phone number', 'mobile'],
+  company: ['company', 'organization', 'employer'],
+  position: ['position', 'title', 'job title', 'role'],
+  location: ['location', 'city'],
+  connectedOn: ['connected on'],
+  notes: ['notes', 'headline', 'summary']
+};
+
+const FUZZY: Record<string, RegExp> = {
+  firstName: /first/,
+  lastName: /last/,
+  url: /linkedin|profile/,
+  email: /e-?mail/,
+  phone: /phone|mobile/,
+  company: /company|organi[sz]ation/,
+  position: /position|title/,
+  location: /location/,
+  notes: /headline|summary/
+};
 
 export async function POST(request: Request) {
+  const t0 = performance.now();
   try {
-    const { csvContent } = await request.json();
+    const csvContent = await readCsvFromRequest(request);
+    if (typeof csvContent !== 'string') return csvContent; // error response
 
-    if (!csvContent || typeof csvContent !== 'string') {
-      return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
-    }
+    // ---- 1. Parse (single pass) ----
+    const rows = parseCSV(csvContent);
+    const t1 = performance.now();
 
-    const lines = csvContent.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) {
+    if (rows.length < 2) {
       return NextResponse.json({ success: false, error: 'CSV file contains no records' }, { status: 400 });
     }
 
-    // LinkedIn exports start with notes/preamble. Dynamically find the real header line.
-    let headerLineIdx = -1;
-    for (let i = 0; i < Math.min(lines.length, 25); i++) {
-      const lower = lines[i].toLowerCase();
-      if (
-        (lower.includes('first name') || lower.includes('url')) &&
-        (lower.includes('company') || lower.includes('position') || lower.includes('title'))
-      ) {
-        headerLineIdx = i;
+    // LinkedIn exports start with a "Notes:" preamble; find the real header row.
+    let headerIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 25); i++) {
+      const lower = rows[i].join(',').toLowerCase();
+      if ((lower.includes('first name') || lower.includes('url')) &&
+          (lower.includes('company') || lower.includes('position') || lower.includes('title'))) {
+        headerIdx = i;
         break;
       }
     }
 
-    // Fallback to first line if no header match found
-    if (headerLineIdx === -1) {
-      headerLineIdx = 0;
-    }
+    const col = buildColumnMap(rows[headerIdx].map((h) => h.toLowerCase().trim()));
+    const get = (cols: string[], key: string) => (col[key] >= 0 ? (cols[col[key]] || '').trim() : '');
 
-    // Parse header row
-    const headers = parseCSVLine(lines[headerLineIdx]).map((h) => h.toLowerCase().trim());
+    // ---- 2. Enrich: classify + score (no DM generation; that happens when a prospect is opened) ----
+    const now = new Date().toISOString();
+    const batch = Date.now().toString(36);
+    const classifyCache = new Map<string, ClassificationResult>();
+    const scoreCache = new Map<string, ScoreExplanation>();
+    const seen = new Set<string>();
 
-    // Precise header index lookups
-    const firstNameIdx = headers.findIndex((h) => h.includes('first name') || h === 'first');
-    const lastNameIdx = headers.findIndex((h) => h.includes('last name') || h === 'last');
-    const nameIdx = headers.findIndex((h) => h === 'name' || h === 'full name');
-    const urlIdx = headers.findIndex((h) => h === 'url' || h.includes('url') || h.includes('linkedin') || h.includes('profile'));
-    const emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('e-mail') || h.includes('mail'));
-    const phoneIdx = headers.findIndex((h) => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
-    const companyIdx = headers.findIndex((h) => h.includes('company') || h.includes('organization') || h.includes('employer'));
-    const positionIdx = headers.findIndex((h) => h.includes('position') || h.includes('title') || h.includes('role') || h.includes('occupation'));
-    const locationIdx = headers.findIndex((h) => h.includes('location') || h.includes('city') || h.includes('country'));
-    const connectedOnIdx = headers.findIndex((h) => h.includes('connected') || h.includes('date'));
-    const notesIdx = headers.findIndex((h) => h.includes('note') || h.includes('headline') || h.includes('about') || h.includes('summary'));
+    let skippedStudents = 0;
+    let skippedDuplicates = 0;
+    const keyed: { p: Prospect; hasContact: number; score: number }[] = [];
 
-    const imported: Prospect[] = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const cols = rows[i];
 
-    // Parse data rows starting after header row
-    for (let i = headerLineIdx + 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+      const first = get(cols, 'firstName');
+      const last = get(cols, 'lastName');
+      const fullName = first || last
+        ? `${first} ${last === '.' || last === '-' ? '' : last}`.trim()
+        : get(cols, 'fullName');
 
-      const cols = parseCSVLine(line);
-      if (cols.length === 0) continue;
+      // Skip blank/deleted connection rows
+      if (!fullName || fullName.length < 2) continue;
 
-      // Extract Name
-      let fullName = '';
-      const firstName = firstNameIdx !== -1 ? cols[firstNameIdx]?.trim() || '' : '';
-      const lastName = lastNameIdx !== -1 ? cols[lastNameIdx]?.trim() || '' : '';
+      const jobTitle = get(cols, 'position') || 'Professional';
+      const notes = get(cols, 'notes');
 
-      if (firstName || lastName) {
-        // Clean up standalone dots or symbols
-        const cleanLast = lastName === '.' || lastName === '-' ? '' : lastName;
-        fullName = `${firstName} ${cleanLast}`.trim();
-      } else if (nameIdx !== -1 && cols[nameIdx]) {
-        fullName = cols[nameIdx].trim();
-      }
-
-      // Skip empty or deleted connection rows (like ",,,,,,07 Sep 2026")
-      if (!fullName || fullName === '.' || fullName === '-' || fullName.length < 2) {
+      // Interns, students and freshers can't hire or refer, so leave them out
+      if (isStudentOrIntern(jobTitle, notes)) {
+        skippedStudents++;
         continue;
       }
 
-      const jobTitle = positionIdx !== -1 && cols[positionIdx]?.trim() ? cols[positionIdx].trim() : 'Professional';
-      const company = companyIdx !== -1 && cols[companyIdx]?.trim() ? cols[companyIdx].trim() : 'Self-employed';
-      const linkedinUrl = urlIdx !== -1 && cols[urlIdx]?.trim()
-        ? cols[urlIdx].trim()
-        : `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(fullName + ' ' + company)}`;
-      const email = emailIdx !== -1 && cols[emailIdx]?.trim() ? cols[emailIdx].trim() : undefined;
-      const phoneNumber = phoneIdx !== -1 && cols[phoneIdx]?.trim() ? cols[phoneIdx].trim() : undefined;
-      const connectedOn = connectedOnIdx !== -1 && cols[connectedOnIdx]?.trim() ? cols[connectedOnIdx].trim() : undefined;
-      const location = locationIdx !== -1 && cols[locationIdx]?.trim() ? cols[locationIdx].trim() : 'Remote';
-      const notes = notesIdx !== -1 && cols[notesIdx]?.trim() ? cols[notesIdx].trim() : '';
+      const company = get(cols, 'company') || 'Self-employed';
+      const rawUrl = get(cols, 'url');
+      const dedupeKey = rawUrl
+        ? rawUrl.toLowerCase().replace(/\/+$/, '')
+        : `${fullName.toLowerCase()}|${company.toLowerCase()}`;
+      if (seen.has(dedupeKey)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seen.add(dedupeKey);
 
-      const { classification, relationshipType, segregationGroup } = classifyProspectTitle(jobTitle, notes);
+      const linkedinUrl = rawUrl ||
+        `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(fullName + ' ' + company)}`;
+      const email = get(cols, 'email') || undefined;
+      const phoneNumber = get(cols, 'phone') || undefined;
+      const location = get(cols, 'location') || 'Remote';
+
+      // Memoized: thousands of connections share titles like "Software Engineer"
+      const classKey = `${jobTitle}|${notes}`.toLowerCase();
+      let cls = classifyCache.get(classKey);
+      if (!cls) {
+        cls = classifyProspectTitle(jobTitle, notes);
+        classifyCache.set(classKey, cls);
+      }
+
+      const hiring = /hiring/i.test(jobTitle) || /hiring/i.test(notes);
 
       const prospect: Prospect = {
-        id: `p-csv-${Date.now()}-${i}`,
+        id: `p-${batch}-${i}`,
         name: fullName,
         jobTitle,
         company,
         location,
         linkedinUrl,
-        email: email || undefined,
-        phoneNumber: phoneNumber || undefined,
-        connectedOn: connectedOn || undefined,
-        segregationGroup,
+        email,
+        phoneNumber,
+        connectedOn: get(cols, 'connectedOn') || undefined,
+        segregationGroup: cls.segregationGroup,
         notes,
-        classification,
-        relationshipType,
+        classification: cls.classification,
+        relationshipType: cls.relationshipType,
         status: 'Not contacted',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
         jobOpportunity: {
-          id: `j-csv-${i}`,
+          id: `j-${batch}-${i}`,
           title: jobTitle,
           company,
           location,
           remoteStatus: 'Remote India',
           description: `Connection at ${company} with title ${jobTitle}`,
           source: 'LinkedIn CSV Import',
-          hiringSignals: jobTitle.toLowerCase().includes('hiring') || notes.toLowerCase().includes('hiring') ? ["Hiring Lead"] : [],
-          requiredSkills: ['React', 'Next.js', 'Python', 'FastAPI', 'PostgreSQL'],
+          hiringSignals: hiring ? ['Hiring Lead'] : [],
+          requiredSkills: REQUIRED_SKILLS,
           minExperienceYears: 3
         }
       };
 
-      prospect.score = calculateScoreAndMatching(prospect, prospect.jobOpportunity);
-      const messages = generatePersonalizedDM(prospect, prospect.jobOpportunity);
-      prospect.draftedMessage = messages.day0;
-      prospect.followUpDay5Message = messages.day5;
-      prospect.followUpDay12Message = messages.day12;
+      // Memoized on every input the scorer actually reads
+      const scoreKey = `${classKey}|${company}|${location}|${cls.classification}|${hiring}`.toLowerCase();
+      let score = scoreCache.get(scoreKey);
+      if (!score) {
+        score = calculateScoreAndMatching(prospect, prospect.jobOpportunity);
+        scoreCache.set(scoreKey, score);
+      }
+      prospect.score = score;
 
-      imported.push(prospect);
+      keyed.push({ p: prospect, hasContact: email || phoneNumber ? 1 : 0, score: score.totalScore });
     }
+    const t2 = performance.now();
 
-    // Sort: Contacts with Email/Phone come FIRST, then sorted by Match Score
-    imported.sort((a, b) => {
-      const aHasContact = Boolean(a.email || a.phoneNumber);
-      const bHasContact = Boolean(b.email || b.phoneNumber);
-      if (aHasContact && !bHasContact) return -1;
-      if (!aHasContact && bHasContact) return 1;
-      return (b.score?.totalScore || 0) - (a.score?.totalScore || 0);
+    // ---- 3. Sort with precomputed keys: contactable first, then by score ----
+    keyed.sort((a, b) => b.hasContact - a.hasContact || b.score - a.score);
+    const prospects = keyed.map((k) => k.p);
+    const t3 = performance.now();
+
+    const timingsMs = {
+      parse: Math.round(t1 - t0),
+      enrich: Math.round(t2 - t1),
+      sort: Math.round(t3 - t2),
+      total: Math.round(t3 - t0)
+    };
+    console.log(
+      `[import-csv] ${prospects.length} prospects, ${skippedStudents} students/interns skipped, ` +
+      `${skippedDuplicates} duplicates skipped, ${classifyCache.size} unique titles`,
+      timingsMs
+    );
+
+    return NextResponse.json({
+      success: true,
+      count: prospects.length,
+      skippedStudents,
+      skippedDuplicates,
+      prospects,
+      timingsMs
     });
-
-    return NextResponse.json({ success: true, count: imported.length, prospects: imported });
   } catch (error) {
     console.error('API /import-csv error:', error);
     return NextResponse.json({ success: false, error: 'Failed to parse CSV' }, { status: 500 });
   }
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
+/** Accepts multipart FormData (field "file") or legacy JSON { csvContent }. */
+async function readCsvFromRequest(request: Request): Promise<string | NextResponse> {
+  const tooLarge = () =>
+    NextResponse.json({ success: false, error: 'CSV file is too large (max 10 MB)' }, { status: 413 });
+  const contentType = request.headers.get('content-type') || '';
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
+  if (contentType.includes('multipart/form-data')) {
+    const form = await request.formData();
+    const file = form.get('file');
+    if (!file || typeof file === 'string') {
+      return NextResponse.json({ success: false, error: 'A CSV file is required' }, { status: 400 });
+    }
+    if (file.size > MAX_FILE_BYTES) return tooLarge();
+    return file.text();
+  }
+
+  const { csvContent } = await request.json();
+  if (!csvContent || typeof csvContent !== 'string') {
+    return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
+  }
+  if (csvContent.length > MAX_FILE_BYTES) return tooLarge();
+  return csvContent;
+}
+
+function buildColumnMap(headers: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const [key, names] of Object.entries(ALIASES)) {
+    map[key] = headers.findIndex((h) => names.includes(h));
+  }
+  for (const [key, re] of Object.entries(FUZZY)) {
+    if (map[key] === -1) map[key] = headers.findIndex((h) => re.test(h));
+  }
+  return map;
+}
+
+/**
+ * Single-pass CSV parser. Handles quoted fields, escaped quotes ("") and
+ * line breaks inside quotes, which a split('\n') approach gets wrong.
+ */
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const start = text.charCodeAt(0) === 0xfeff ? 1 : 0; // strip BOM
+
+  for (let i = start; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inQuotes) {
+      if (c === 34) {
+        if (text.charCodeAt(i + 1) === 34) { field += '"'; i++; }
+        else inQuotes = false;
       } else {
-        inQuotes = !inQuotes;
+        field += text[i];
       }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
+    } else if (c === 34) {
+      inQuotes = true;
+    } else if (c === 44) {
+      row.push(field.trim());
+      field = '';
+    } else if (c === 10 || c === 13) {
+      if (c === 13 && text.charCodeAt(i + 1) === 10) i++;
+      row.push(field.trim());
+      field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
     } else {
-      current += char;
+      field += text[i];
     }
   }
-  result.push(current.trim());
-  return result;
+  if (field || row.length) {
+    row.push(field.trim());
+    if (row.length > 1 || row[0] !== '') rows.push(row);
+  }
+  return rows;
 }

@@ -42,18 +42,19 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
   const [isLogging, setIsLogging] = useState(false);
   const [logSuccess, setLogSuccess] = useState(false);
 
-  // Synchronize message if prospect changes
+  // Load the stored message, or generate it on demand (imports no longer pre-generate DMs)
   useEffect(() => {
-    setMessage(
+    const stored =
       activeTab === 'day0'
-        ? prospect.draftedMessage || ''
+        ? prospect.draftedMessage
         : activeTab === 'day5'
-        ? prospect.followUpDay5Message || ''
-        : prospect.followUpDay12Message || ''
-    );
+        ? prospect.followUpDay5Message
+        : prospect.followUpDay12Message;
+    setMessage(stored || generatePersonalizedDM(prospect, prospect.jobOpportunity, selectedAngle)[activeTab]);
     setCopied(false);
     setDuplicateWarning(null);
     setLogSuccess(prospect.status === 'Contacted');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prospect, activeTab]);
 
   const matchScore = prospect.score?.totalScore || 85;
