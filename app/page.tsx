@@ -23,6 +23,7 @@ import { ManualProspectModal } from '@/components/ManualProspectModal';
 import { CsvImportSection } from '@/components/CsvImportSection';
 import { LinkedInCsvGuideModal } from '@/components/LinkedInCsvGuideModal';
 import { WorkflowView, WorkflowType } from '@/components/WorkflowView';
+import { SegregatedConnectionsView } from '@/components/SegregatedConnectionsView';
 import {
   Sparkles,
   Zap,
@@ -43,6 +44,7 @@ import {
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowType | null>(null);
+  const [workflowStep, setWorkflowStep] = useState<'upload' | 'segregated'>('upload');
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,6 +119,13 @@ export default function Home() {
     setProspects(updated);
     saveClientProspects(updated);
     setCurrentTab('prospects');
+  };
+
+  const handleWorkflowImportComplete = (imported: Prospect[]) => {
+    const updated = [...imported, ...prospects];
+    setProspects(updated);
+    saveClientProspects(updated);
+    setWorkflowStep('segregated');
   };
 
   const handleOutreachStatusChange = async (entry: OutreachLogEntry, newStatus: OutreachStatus) => {
@@ -257,28 +266,45 @@ export default function Home() {
         currentTab={currentTab}
         onTabChange={(tab) => {
           setSelectedWorkflow(null);
+          setWorkflowStep('upload');
           setCurrentTab(tab);
         }}
         onBackToLanding={() => {
           setSelectedWorkflow(null);
+          setWorkflowStep('upload');
           setCurrentTab('home');
         }}
       />
 
       <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col relative pb-20 md:pb-8 px-4 sm:px-6 lg:px-8 pt-6">
         <main className="flex-1 space-y-6">
-          {/* TAB 1: HOME LANDING */}
+          {/* TAB 1: HOME LANDING & WORKFLOWS */}
           {currentTab === 'home' && (
             <div className="space-y-8 animate-in fade-in duration-200">
-              {selectedWorkflow ? (
-                /* Sub-page for Selected Workflow */
+              {selectedWorkflow && workflowStep === 'upload' && (
+                /* Step 1: Upload Documents & Connections CSV */
                 <WorkflowView
                   workflow={selectedWorkflow}
-                  onBack={() => setSelectedWorkflow(null)}
-                  onImportComplete={handleCsvImportComplete}
+                  onBack={() => {
+                    setSelectedWorkflow(null);
+                    setWorkflowStep('upload');
+                  }}
+                  onImportComplete={handleWorkflowImportComplete}
                   onOpenGuideModal={() => setIsGuideModalOpen(true)}
                 />
-              ) : (
+              )}
+
+              {selectedWorkflow && workflowStep === 'segregated' && (
+                /* Step 2: Segregated Connections View (Founders / HR / Employees + Email/Phone Priority) */
+                <SegregatedConnectionsView
+                  workflow={selectedWorkflow}
+                  prospects={prospects}
+                  onBack={() => setWorkflowStep('upload')}
+                  onReviewDM={(p) => setSelectedProspect(p)}
+                />
+              )}
+
+              {!selectedWorkflow && (
                 /* Clean 4-Tile Landing Page (Nothing Below Tiles) */
                 <div className="space-y-8">
                   {/* Hero Banner Header */}
@@ -298,7 +324,10 @@ export default function Home() {
                       return (
                         <div
                           key={tile.id}
-                          onClick={() => setSelectedWorkflow(tile.id)}
+                          onClick={() => {
+                            setSelectedWorkflow(tile.id);
+                            setWorkflowStep('upload');
+                          }}
                           className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-6 shadow-sm cursor-pointer flex flex-col justify-between group transition-all"
                         >
                           <div className="space-y-3.5">

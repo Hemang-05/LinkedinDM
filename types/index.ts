@@ -66,6 +66,8 @@ export interface JobOpportunity {
   salaryRange?: string;
 }
 
+export type SegregationGroup = 'Founder' | 'HR' | 'Employee' | 'Other';
+
 export interface Prospect {
   id: string;
   name: string;
@@ -78,6 +80,10 @@ export interface Prospect {
   headline?: string;
   notes?: string;
   linkedinUrl: string;
+  email?: string;
+  phoneNumber?: string;
+  connectedOn?: string;
+  segregationGroup: SegregationGroup;
   classification: ProspectClassification;
   relationshipType: RelationshipType;
   

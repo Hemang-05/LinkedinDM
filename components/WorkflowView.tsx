@@ -12,7 +12,8 @@ import {
   Target,
   UserCheck,
   Laptop,
-  Check
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { Prospect } from '@/types';
 
@@ -36,7 +37,7 @@ export function WorkflowView({
   const [targetSector, setTargetSector] = useState('');
   
   // CSV upload state
-  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [successCount, setSuccessCount] = useState<number | null>(null);
@@ -49,7 +50,7 @@ export function WorkflowView({
           subtitle: 'Upload your resume and LinkedIn connections to generate personalized outreach to hiring managers and recruiters.',
           icon: Briefcase,
           secondaryLabel: 'Upload Your Resume',
-          secondaryDesc: 'Upload your latest CV (.pdf, .docx, .txt) so messages highlight your exact skills and experience.',
+          secondaryDesc: 'Upload your latest CV (.pdf, .docx, .txt) to extract your background & match relevant hiring leads.',
           acceptSecondary: '.pdf,.docx,.txt'
         };
       case 'agency-leads':
@@ -92,17 +93,26 @@ export function WorkflowView({
     }
   };
 
-  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setCsvFile(file);
+      setErrorMsg('');
+    }
+  };
 
-    setCsvFile(file);
-    setIsUploadingCsv(true);
+  const handleContinue = async () => {
+    if (!csvFile) {
+      setErrorMsg('Please select your LinkedIn Connections CSV file to continue.');
+      return;
+    }
+
+    setIsProcessing(true);
     setErrorMsg('');
     setSuccessCount(null);
 
     try {
-      const text = await file.text();
+      const text = await csvFile.text();
       const res = await fetch('/api/import-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,18 +128,19 @@ export function WorkflowView({
         setSuccessCount(data.count);
         setTimeout(() => {
           onImportComplete(data.prospects);
-        }, 600);
+        }, 500);
       } else {
         setErrorMsg(data.error || 'Failed to process CSV file');
+        setIsProcessing(false);
       }
     } catch (err) {
       console.error('CSV upload error:', err);
       setErrorMsg('Failed to read or upload file');
-    } finally {
-      setIsUploadingCsv(false);
-      e.target.value = '';
+      setIsProcessing(false);
     }
   };
+
+  const canContinue = Boolean(csvFile);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-200">
@@ -164,7 +175,7 @@ export function WorkflowView({
       {successCount !== null && (
         <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Successfully processed {successCount} connections! Opening review...</span>
+          <span>Successfully processed {successCount} connections! Navigating to segregated view...</span>
         </div>
       )}
 
@@ -177,7 +188,7 @@ export function WorkflowView({
               <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Step 1</span>
               <h3 className="text-sm font-bold text-zinc-900 mt-0.5">Target Sector / Industry (Optional)</h3>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Which sector or market are your agency leads in? (e.g. B2B Founders, SaaS, E-commerce, Healthcare)
+                Which sector or market are your agency leads in? (e.g. B2B SaaS, E-commerce, FinTech, Agency Owners)
               </p>
             </div>
             <input
@@ -199,7 +210,7 @@ export function WorkflowView({
               {secondaryFile && (
                 <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                   <Check className="w-3.5 h-3.5" />
-                  <span>Uploaded</span>
+                  <span>Selected</span>
                 </span>
               )}
             </div>
@@ -226,18 +237,16 @@ export function WorkflowView({
         <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                {workflow === 'agency-leads' ? 'Step 2' : 'Step 2'}
-              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Step 2</span>
               <h3 className="text-sm font-bold text-zinc-900 mt-0.5">Upload LinkedIn Connections CSV</h3>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Upload your Connections.csv file exported from LinkedIn to parse and rank contacts.
+                Upload your Connections.csv file exported from LinkedIn to parse and segregate contacts.
               </p>
             </div>
             {csvFile && (
               <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" />
-                <span>{csvFile.name}</span>
+                <span>Selected</span>
               </span>
             )}
           </div>
@@ -247,7 +256,7 @@ export function WorkflowView({
               <Upload className="w-6 h-6" />
             </div>
             <span className="text-xs font-bold text-zinc-900">
-              {isUploadingCsv ? 'Processing and ranking connections...' : 'Select LinkedIn Connections CSV file'}
+              {csvFile ? csvFile.name : 'Select or drag LinkedIn Connections CSV file here'}
             </span>
             <span className="text-[11px] text-zinc-500 mt-1">
               Accepts standard Connections.csv export
@@ -255,8 +264,8 @@ export function WorkflowView({
             <input
               type="file"
               accept=".csv"
-              onChange={handleCsvUpload}
-              disabled={isUploadingCsv}
+              onChange={handleCsvFileChange}
+              disabled={isProcessing}
               className="hidden"
             />
           </label>
@@ -273,6 +282,22 @@ export function WorkflowView({
             </button>
             <span className="text-[11px] text-zinc-400">100% Client-Side Privacy</span>
           </div>
+        </div>
+
+        {/* Action Button: Next / Continue at Bottom Right */}
+        <div className="flex items-center justify-end pt-2">
+          <button
+            onClick={handleContinue}
+            disabled={!canContinue || isProcessing}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all ${
+              canContinue && !isProcessing
+                ? 'bg-zinc-900 hover:bg-zinc-800 text-white cursor-pointer active:scale-[0.98]'
+                : 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
+            }`}
+          >
+            <span>{isProcessing ? 'Analyzing Connections...' : 'Continue to Next Step'}</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

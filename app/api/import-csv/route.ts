@@ -28,6 +28,9 @@ export async function POST(request: Request) {
     const titleIdx = headers.findIndex(h => h.includes('title') || h.includes('position') || h.includes('role') || h.includes('occupation'));
     const companyIdx = headers.findIndex(h => h.includes('company') || h.includes('organization'));
     const urlIdx = headers.findIndex(h => h.includes('url') || h.includes('linkedin') || h.includes('profile'));
+    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('e-mail') || h.includes('mail'));
+    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
+    const connectedOnIdx = headers.findIndex(h => h.includes('connected') || h.includes('date'));
     const locationIdx = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
     const notesIdx = headers.findIndex(h => h.includes('note') || h.includes('headline') || h.includes('about') || h.includes('summary'));
 
@@ -47,12 +50,15 @@ export async function POST(request: Request) {
       const jobTitle = titleIdx !== -1 ? cols[titleIdx] || 'Engineer' : 'Engineer';
       const company = companyIdx !== -1 ? cols[companyIdx] || 'Startup' : 'Startup';
       const linkedinUrl = urlIdx !== -1 ? cols[urlIdx] || '' : '';
+      const email = emailIdx !== -1 ? cols[emailIdx]?.trim() || undefined : undefined;
+      const phoneNumber = phoneIdx !== -1 ? cols[phoneIdx]?.trim() || undefined : undefined;
+      const connectedOn = connectedOnIdx !== -1 ? cols[connectedOnIdx]?.trim() || undefined : undefined;
       const location = locationIdx !== -1 ? cols[locationIdx] || 'Remote India' : 'Remote India';
       const notes = notesIdx !== -1 ? cols[notesIdx] || '' : '';
 
       if (!name && !company) continue;
 
-      const { classification, relationshipType } = classifyProspectTitle(jobTitle, notes);
+      const { classification, relationshipType, segregationGroup } = classifyProspectTitle(jobTitle, notes);
 
       const prospect: Prospect = {
         id: `p-csv-${Date.now()}-${i}`,
@@ -61,6 +67,10 @@ export async function POST(request: Request) {
         company,
         location,
         linkedinUrl: linkedinUrl || `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(name + ' ' + company)}`,
+        email: email || undefined,
+        phoneNumber: phoneNumber || undefined,
+        connectedOn: connectedOn || undefined,
+        segregationGroup,
         notes,
         classification,
         relationshipType,
@@ -90,6 +100,15 @@ export async function POST(request: Request) {
       addProspect(prospect);
       imported.push(prospect);
     }
+
+    // Sort: Contacts with Email/Phone come FIRST, then sorted by Match Score
+    imported.sort((a, b) => {
+      const aHasContact = Boolean(a.email || a.phoneNumber);
+      const bHasContact = Boolean(b.email || b.phoneNumber);
+      if (aHasContact && !bHasContact) return -1;
+      if (!aHasContact && bHasContact) return 1;
+      return (b.score?.totalScore || 0) - (a.score?.totalScore || 0);
+    });
 
     return NextResponse.json({ success: true, count: imported.length, prospects: imported });
   } catch (error) {

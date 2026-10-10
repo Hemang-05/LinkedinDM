@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Name, Company, and LinkedIn URL are required' }, { status: 400 });
     }
 
-    const { classification, relationshipType } = classifyProspectTitle(jobTitle || 'Engineer', notes || '');
+    const { classification, relationshipType, segregationGroup } = classifyProspectTitle(jobTitle || 'Engineer', notes || '');
 
     const newProspect: Prospect = {
       id: `p-${Date.now()}`,
@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       notes: notes || '',
       classification,
       relationshipType,
+      segregationGroup,
       status: 'Not contacted',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
