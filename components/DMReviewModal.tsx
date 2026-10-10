@@ -178,55 +178,55 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-6 space-y-4.5 overflow-y-auto safe-pb">
+        <div className="p-6 sm:p-7 space-y-5.5 sm:space-y-6 overflow-y-auto safe-pb">
           {duplicateWarning && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2.5 shadow-2xs">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-600" />
               <div className="flex-1 font-medium">{duplicateWarning}</div>
             </div>
           )}
 
           {logSuccess && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-2xs">
               <div className="flex items-center gap-2 font-medium">
                 <Check className="w-4 h-4 text-emerald-600" />
                 <span>Logged ✓ (Saved in browser storage & outreach log)</span>
               </div>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2.5 py-0.5 rounded-md">
                 Contacted
               </span>
             </div>
           )}
 
           {/* Section 1: Person & Company Card */}
-          <div className="bg-zinc-50/80 rounded-2xl p-4.5 border border-zinc-200/90 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <div className="bg-zinc-50/80 rounded-2xl p-5 sm:p-5.5 border border-zinc-200/90 flex items-start justify-between gap-4 shadow-2xs">
+            <div className="min-w-0 space-y-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                 Person
               </span>
-              <h3 className="text-base font-bold text-zinc-900 tracking-tight truncate">
+              <h3 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight truncate">
                 {prospect.name}
               </h3>
-              <p className="text-xs text-zinc-600 flex items-center gap-1.5 mt-0.5">
+              <p className="text-xs text-zinc-600 flex items-center gap-2 pt-0.5">
                 <span className="font-semibold text-zinc-900">{prospect.classification}</span>
                 <span>·</span>
                 <span className="truncate">{company}</span>
               </p>
-              <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+              <p className="text-xs text-zinc-500 truncate">
                 {prospect.jobTitle}
               </p>
             </div>
 
-            <div className="flex flex-col items-end flex-shrink-0">
+            <div className="flex flex-col items-end flex-shrink-0 pl-2">
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                 Match
               </span>
-              <div className="text-xl font-black text-emerald-600 mt-0.5">
+              <div className="text-2xl font-black text-emerald-600 mt-0.5">
                 {matchScore}%
               </div>
               <button
                 onClick={() => setShowScoreDetails(!showScoreDetails)}
-                className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 flex items-center gap-0.5 mt-0.5 transition-colors"
+                className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 flex items-center gap-1 mt-1 transition-colors"
               >
                 <span>Why</span>
                 {showScoreDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -236,15 +236,15 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
           {/* Section 2: Expandable Transparent Match Breakdown */}
           {showScoreDetails && prospect.score && (
-            <div className="bg-white rounded-2xl p-4 border border-zinc-200 text-xs space-y-2.5 shadow-xs animate-in fade-in duration-150">
-              <div className="font-semibold text-zinc-800 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-zinc-500" />
-                <span>Transparent Scoring Breakdown (0–100)</span>
+            <div className="bg-white rounded-2xl p-5 border border-zinc-200 text-xs space-y-3.5 shadow-xs animate-in fade-in duration-150">
+              <div className="font-semibold text-zinc-800 flex items-center gap-1.5 pb-1 border-b border-zinc-100">
+                <Info className="w-4 h-4 text-zinc-500" />
+                <span className="text-xs font-bold">Transparent Scoring Breakdown (0–100)</span>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {prospect.score.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[11px] py-1 border-b border-zinc-100">
+                  <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-zinc-50">
                     <span className="text-zinc-600">{item.category}</span>
                     <span className={`font-semibold ${item.matched ? 'text-emerald-700' : 'text-zinc-400'}`}>
                       +{item.points} / {item.maxPoints} pts
@@ -253,12 +253,12 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                 ))}
               </div>
 
-              <div className="pt-1.5 space-y-2">
+              <div className="pt-2 space-y-2.5">
                 <div>
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase">Strong Matches:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-1">Strong Matches:</span>
+                  <div className="flex flex-wrap gap-1.5">
                     {prospect.score.strongMatches.map((m, i) => (
-                      <span key={i} className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-medium">
+                      <span key={i} className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-md font-medium">
                         ✓ {m}
                       </span>
                     ))}
@@ -267,10 +267,10 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
                 {prospect.score.gaps.length > 0 && (
                   <div>
-                    <span className="text-[10px] font-bold text-amber-700 uppercase">Gaps:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block mb-1">Gaps:</span>
+                    <div className="flex flex-wrap gap-1.5">
                       {prospect.score.gaps.map((g, i) => (
-                        <span key={i} className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-medium">
+                        <span key={i} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-md font-medium">
                           - {g}
                         </span>
                       ))}
@@ -278,9 +278,9 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                   </div>
                 )}
 
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase">Blockers:</span>
-                  <span className="text-[11px] text-zinc-700 ml-1.5">
+                <div className="pt-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Blockers:</span>
+                  <span className="text-xs text-zinc-700 ml-2">
                     {prospect.score.blockers.length === 0 ? 'None' : prospect.score.blockers.join(', ')}
                   </span>
                 </div>
@@ -289,55 +289,60 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           )}
 
           {/* Section 3: Target Role Opening */}
-          <div className="bg-zinc-50/60 rounded-xl p-3 border border-zinc-200/80">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">
+          <div className="bg-zinc-50/60 rounded-2xl p-4 sm:p-4.5 border border-zinc-200/80 space-y-1">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
               Role being hired for
             </span>
-            <div className="text-xs font-semibold text-zinc-900">
+            <div className="text-sm font-bold text-zinc-900">
               {hiringRole}
             </div>
             {prospect.jobOpportunity && (
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+              <p className="text-xs text-zinc-500 pt-0.5">
                 {prospect.jobOpportunity.location} · {prospect.jobOpportunity.remoteStatus}
               </p>
             )}
           </div>
 
           {/* Section 4: Sequence Tabs */}
-          <div className="flex rounded-xl bg-zinc-100 p-1 border border-zinc-200/80">
-            <button
-              onClick={() => setActiveTab('day0')}
-              className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${
-                activeTab === 'day0' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
-              }`}
-            >
-              Day 0 (Initial)
-            </button>
-            <button
-              onClick={() => setActiveTab('day5')}
-              className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${
-                activeTab === 'day5' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
-              }`}
-            >
-              Day 5 Follow-up
-            </button>
-            <button
-              onClick={() => setActiveTab('day12')}
-              className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${
-                activeTab === 'day12' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
-              }`}
-            >
-              Day 12 Final
-            </button>
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block px-0.5">
+              Outreach Sequence Touchpoint
+            </span>
+            <div className="flex rounded-xl bg-zinc-100 p-1.5 gap-1 border border-zinc-200/80">
+              <button
+                onClick={() => setActiveTab('day0')}
+                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
+                  activeTab === 'day0' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                }`}
+              >
+                Day 0 (Initial)
+              </button>
+              <button
+                onClick={() => setActiveTab('day5')}
+                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
+                  activeTab === 'day5' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                }`}
+              >
+                Day 5 Follow-up
+              </button>
+              <button
+                onClick={() => setActiveTab('day12')}
+                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
+                  activeTab === 'day12' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                }`}
+              >
+                Day 12 Final
+              </button>
+            </div>
           </div>
 
           {/* Section 4B: Message Angle Selector */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-600">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 px-0.5">
               <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Outreach Angle</span>
+              <span>Outreach Angle / Pitch Hook</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
               {[
                 { id: 'standard' as MessageAngle, label: 'Standard / Adaptive' },
                 { id: 'founding' as MessageAngle, label: 'Founding 0→1 Ownership' },
@@ -347,7 +352,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                 <button
                   key={opt.id}
                   onClick={() => handleSwitchAngle(opt.id)}
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] transition-all text-left truncate ${
+                  className={`py-2 px-3 rounded-xl text-[11px] transition-all text-left truncate ${
                     selectedAngle === opt.id
                       ? 'bg-zinc-900 text-white font-semibold shadow-xs'
                       : 'bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200 text-zinc-700 font-medium'
@@ -360,8 +365,8 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           </div>
 
           {/* Section 5: The Message Textarea */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-zinc-500">
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between text-xs px-0.5">
               <span className="font-bold uppercase tracking-wider text-zinc-700">Generated Message</span>
               <span className={`text-[11px] font-medium ${wordCount >= 50 && wordCount <= 100 ? 'text-emerald-700 font-semibold' : 'text-zinc-500'}`}>
                 {wordCount} words (Target: 50–100)
@@ -372,16 +377,17 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               value={message}
               onChange={(e) => handleMessageChange(e.target.value)}
               rows={5}
-              className="w-full bg-zinc-50 text-zinc-900 text-xs sm:text-sm rounded-xl p-3.5 border border-zinc-200 focus:outline-none focus:border-zinc-400 focus:bg-white leading-relaxed font-sans shadow-2xs"
+              className="w-full bg-zinc-50 text-zinc-900 text-xs sm:text-sm rounded-2xl p-4 border border-zinc-200 focus:outline-none focus:border-zinc-400 focus:bg-white leading-relaxed font-sans shadow-2xs min-h-[130px]"
               placeholder="Draft your personalized message..."
             />
           </div>
 
-          {/* Quick Action Button: Copy DM */}
-          <div>
+          {/* Action Buttons Section */}
+          <div className="space-y-3 pt-2">
+            {/* Quick Action Button: Copy DM */}
             <button
               onClick={handleCopy}
-              className={`w-full py-3 px-3 rounded-xl active:scale-[0.98] text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all ${
+              className={`w-full py-3.5 px-4 rounded-xl active:scale-[0.98] text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all ${
                 copied
                   ? 'bg-emerald-600 text-white'
                   : 'bg-zinc-900 hover:bg-zinc-800 text-white'
@@ -390,43 +396,39 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               {copied ? <Check className="w-4 h-4 stroke-[3px]" /> : <Copy className="w-4 h-4" />}
               <span>{copied ? 'Copied to Clipboard ✓' : 'Copy DM to Clipboard'}</span>
             </button>
-          </div>
 
-          {/* Step 6: LinkedIn Handoff */}
-          {copied && (
-            <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs space-y-2 animate-in fade-in duration-200">
-              <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span>DM copied. Open LinkedIn and send it.</span>
+            {/* LinkedIn Handoff */}
+            {copied ? (
+              <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs space-y-2.5 animate-in fade-in duration-200">
+                <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>DM copied. Open LinkedIn and send it.</span>
+                </div>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  Open recipient&apos;s LinkedIn page, paste your message into the chat, and hit send.
+                </p>
+                <button
+                  onClick={handleOpenLinkedIn}
+                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open LinkedIn Profile</span>
+                </button>
               </div>
-              <p className="text-[11px] text-zinc-500">
-                Open recipient&apos;s LinkedIn page manually, paste your message, and hit send.
-              </p>
+            ) : (
               <button
                 onClick={handleOpenLinkedIn}
-                className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                className="w-full py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-2 transition-colors"
               >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open LinkedIn Profile</span>
+                <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
+                <span>Open LinkedIn Profile Externally</span>
               </button>
-            </div>
-          )}
+            )}
 
-          {!copied && (
-            <button
-              onClick={handleOpenLinkedIn}
-              className="w-full py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Open LinkedIn externally</span>
-            </button>
-          )}
-
-          {/* Primary Bottom Action: Mark as Contacted */}
-          <div className="pt-1">
+            {/* Primary Bottom Action: Mark as Contacted */}
             <button
               onClick={handleInitiateContacted}
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all mt-1"
             >
               <Send className="w-4 h-4" />
               <span>Mark as Contacted</span>
