@@ -31,23 +31,26 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
       className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4 shadow-sm cursor-pointer flex flex-col justify-between transition-all"
     >
       <div>
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-zinc-900 tracking-tight">{prospect.name}</h4>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
+        <div className="flex items-start justify-between gap-2.5 mb-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h4 className="text-sm sm:text-base font-bold text-zinc-900 tracking-tight break-words">
+                {prospect.name}
+              </h4>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200 shrink-0">
                 {prospect.classification}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
-              <Building2 className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-              <span>{prospect.company}</span>
-              <span>·</span>
-              <span className="truncate">{prospect.jobTitle}</span>
+            <p className="text-xs text-zinc-600 font-medium line-clamp-2 mt-1 break-words">
+              {prospect.jobTitle}
+            </p>
+            <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-1">
+              <Building2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <span className="font-semibold text-zinc-700 break-words">{prospect.company}</span>
             </p>
           </div>
 
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-end shrink-0">
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
               {matchScore}%
             </span>
@@ -55,12 +58,14 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
         </div>
 
         {/* Location & Remote */}
-        <div className="flex items-center gap-2 text-[11px] text-zinc-500 mb-2.5">
-          <span className="flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="truncate">{prospect.location}</span>
-          </span>
-        </div>
+        {prospect.location && (
+          <div className="flex items-center gap-2 text-[11px] text-zinc-500 mb-2.5">
+            <span className="flex items-center gap-1 break-words">
+              <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <span>{prospect.location}</span>
+            </span>
+          </div>
+        )}
 
         {/* Hiring summary if exists */}
         {prospect.jobOpportunity && (

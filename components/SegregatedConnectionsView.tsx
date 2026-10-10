@@ -17,7 +17,9 @@ import {
   Laptop,
   CheckCircle2,
   Calendar,
-  X
+  X,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Prospect, SegregationGroup } from '@/types';
 import { WorkflowType } from './WorkflowView';
@@ -28,6 +30,13 @@ interface SegregatedConnectionsViewProps {
   onBack: () => void;
   onReset?: () => void;
   onReviewDM: (prospect: Prospect) => void;
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0 || !parts[0]) return 'P';
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function SegregatedConnectionsView({
@@ -41,6 +50,16 @@ export function SegregatedConnectionsView({
   const [hasContactOnly, setHasContactOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('All');
+  const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null);
+
+  const handleCopyEmail = (e: React.MouseEvent, id: string, email: string) => {
+    e.stopPropagation();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(email);
+      setCopiedEmailId(id);
+      setTimeout(() => setCopiedEmailId(null), 2000);
+    }
+  };
 
   // Workflow titles
   const getWorkflowTitle = () => {
@@ -358,7 +377,7 @@ export function SegregatedConnectionsView({
           <p className="text-xs text-zinc-500">Try resetting the search or category filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5">
           {filtered.map((prospect) => {
             const hasEmail = Boolean(prospect.email);
             const hasPhone = Boolean(prospect.phoneNumber);
@@ -367,101 +386,137 @@ export function SegregatedConnectionsView({
             return (
               <div
                 key={prospect.id}
-                className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-4.5 shadow-sm flex flex-col justify-between transition-all group"
+                className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 hover:shadow-md rounded-2xl p-5 shadow-xs flex flex-col justify-between transition-all duration-200 group"
               >
-                <div className="space-y-3">
-                  {/* Top line: Name & Segregation Badge */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="text-sm font-bold text-zinc-900 truncate group-hover:text-zinc-700">
+                <div className="space-y-3.5">
+                  {/* Top line: Avatar, Full Name & Segregation Badge */}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
+                        prospect.segregationGroup === 'Founder'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200/80'
+                          : prospect.segregationGroup === 'HR'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200/80'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200/80'
+                      }`}
+                    >
+                      {getInitials(prospect.name)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm sm:text-base font-bold text-zinc-900 leading-snug break-words group-hover:text-zinc-800">
                           {prospect.name}
                         </h3>
+
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 tracking-wide uppercase ${
+                            prospect.segregationGroup === 'Founder'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : prospect.segregationGroup === 'HR'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                          }`}
+                        >
+                          {prospect.segregationGroup === 'Founder'
+                            ? 'Founder'
+                            : prospect.segregationGroup === 'HR'
+                            ? 'Recruiter'
+                            : 'Employee'}
+                        </span>
                       </div>
-                      <p className="text-xs text-zinc-600 font-medium truncate mt-0.5">
+
+                      <p
+                        className="text-xs text-zinc-600 font-medium leading-relaxed line-clamp-2 mt-1 break-words"
+                        title={prospect.jobTitle}
+                      >
                         {prospect.jobTitle}
                       </p>
                     </div>
-
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
-                        prospect.segregationGroup === 'Founder'
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : prospect.segregationGroup === 'HR'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                      }`}
-                    >
-                      {prospect.segregationGroup === 'Founder'
-                        ? 'Founder'
-                        : prospect.segregationGroup === 'HR'
-                        ? 'Recruiter'
-                        : 'Employee'}
-                    </span>
                   </div>
 
-                  {/* Company & Location */}
-                  <div className="text-[11px] text-zinc-500 space-y-1">
-                    <p className="flex items-center gap-1.5 truncate">
+                  {/* Company & Location Info */}
+                  <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-zinc-500 pt-0.5">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-700 break-words">
                       <Building2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <span className="font-semibold text-zinc-700 truncate">{prospect.company}</span>
-                    </p>
+                      <span>{prospect.company}</span>
+                    </span>
                     {prospect.location && (
-                      <p className="flex items-center gap-1.5 truncate">
-                        <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        <span className="truncate">{prospect.location}</span>
-                      </p>
+                      <span className="inline-flex items-center gap-1 text-zinc-500 break-words">
+                        <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
+                        <span>{prospect.location}</span>
+                      </span>
                     )}
                   </div>
 
-                  {/* Prioritized Contact Badges (Email & Phone) */}
+                  {/* Direct Contact Badges (Email & Phone) */}
                   {hasDirectContact ? (
-                    <div className="bg-emerald-50 border border-emerald-200/90 rounded-xl p-2.5 space-y-1 text-xs">
+                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 space-y-1.5 text-xs">
                       {hasEmail && (
-                        <div className="flex items-center gap-1.5 text-emerald-800 font-medium truncate">
-                          <Mail className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span className="truncate">{prospect.email}</span>
+                        <div className="flex items-center justify-between gap-2 text-emerald-950 font-medium">
+                          <div className="flex items-center gap-1.5 min-w-0 break-all select-all">
+                            <Mail className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span className="text-xs leading-tight">{prospect.email}</span>
+                          </div>
+                          <button
+                            onClick={(e) => handleCopyEmail(e, prospect.id, prospect.email!)}
+                            className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold shrink-0 flex items-center gap-1 transition-colors"
+                            title="Copy email address"
+                          >
+                            {copiedEmailId === prospect.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-700" />
+                                <span>Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-emerald-700" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                       )}
                       {hasPhone && (
-                        <div className="flex items-center gap-1.5 text-emerald-800 font-medium truncate">
+                        <div className="flex items-center gap-1.5 text-emerald-950 font-medium break-all select-all">
                           <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span className="truncate">{prospect.phoneNumber}</span>
+                          <span className="text-xs leading-tight">{prospect.phoneNumber}</span>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-zinc-400 italic">
-                      LinkedIn InMail / Message only
+                    <div className="text-[11px] text-zinc-400 font-normal flex items-center gap-1.5 pt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-300"></span>
+                      <span>LinkedIn InMail / Message</span>
                     </div>
                   )}
 
-                  {/* Connected on Date if available */}
+                  {/* Connected On Date if available */}
                   {prospect.connectedOn && (
-                    <p className="text-[10px] text-zinc-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-zinc-300" />
-                      <span>Connected: {prospect.connectedOn}</span>
+                    <p className="text-[10px] text-zinc-400 flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-zinc-400" />
+                      <span>Connected on {prospect.connectedOn}</span>
                     </p>
                   )}
                 </div>
 
-                {/* Bottom CTA Row */}
-                <div className="pt-3 mt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
+                {/* Bottom Action Row */}
+                <div className="pt-3.5 mt-3.5 border-t border-zinc-100 flex items-center justify-between gap-2">
                   <a
                     href={prospect.linkedinUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-zinc-500 hover:text-zinc-900 font-semibold flex items-center gap-1 transition-colors"
+                    className="text-xs text-zinc-500 hover:text-zinc-900 font-medium flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-zinc-100 transition-colors"
                   >
-                    <span>Profile</span>
-                    <ExternalLink className="w-3 h-3" />
+                    <span>LinkedIn Profile</span>
+                    <ExternalLink className="w-3 h-3 text-zinc-400" />
                   </a>
 
                   <button
                     onClick={() => onReviewDM(prospect)}
-                    className="py-1.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                    className="py-2 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-[0.98]"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>Review & Send DM</span>
                   </button>
                 </div>
