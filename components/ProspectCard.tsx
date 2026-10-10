@@ -28,7 +28,7 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
   return (
     <div
       onClick={() => onSelect(prospect)}
-      className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4 shadow-sm cursor-pointer flex flex-col justify-between transition-all"
+      className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-6 shadow-sm cursor-pointer flex flex-col justify-between transition-all"
     >
       <div>
         <div className="flex items-start justify-between gap-2.5 mb-2.5">
@@ -76,7 +76,7 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-2.5 border-t border-zinc-100 mt-1">
+      <div className="flex items-center justify-between pt-3.5 border-t border-zinc-100 mt-3.5">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${statusClass}`}>
           {prospect.status}
         </span>

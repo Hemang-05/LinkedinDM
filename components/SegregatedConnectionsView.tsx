@@ -377,7 +377,7 @@ export function SegregatedConnectionsView({
           <p className="text-xs text-zinc-500">Try resetting the search or category filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 xl:gap-7">
           {filtered.map((prospect) => {
             const hasEmail = Boolean(prospect.email);
             const hasPhone = Boolean(prospect.phoneNumber);
@@ -386,13 +386,13 @@ export function SegregatedConnectionsView({
             return (
               <div
                 key={prospect.id}
-                className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 hover:shadow-md rounded-2xl p-5 shadow-xs flex flex-col justify-between transition-all duration-200 group"
+                className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 hover:shadow-md rounded-2xl p-6 shadow-xs flex flex-col justify-between transition-all duration-200 group"
               >
-                <div className="space-y-3.5">
+                <div className="space-y-4">
                   {/* Top line: Avatar, Full Name & Segregation Badge */}
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3.5">
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
                         prospect.segregationGroup === 'Founder'
                           ? 'bg-purple-50 text-purple-700 border-purple-200/80'
                           : prospect.segregationGroup === 'HR'
@@ -501,7 +501,7 @@ export function SegregatedConnectionsView({
                 </div>
 
                 {/* Bottom Action Row */}
-                <div className="pt-3.5 mt-3.5 border-t border-zinc-100 flex items-center justify-between gap-2">
+                <div className="pt-4.5 mt-4.5 border-t border-zinc-100 flex items-center justify-between gap-2">
                   <a
                     href={prospect.linkedinUrl}
                     target="_blank"
