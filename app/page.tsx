@@ -22,6 +22,7 @@ import { OutreachHistoryCard } from '@/components/OutreachHistoryCard';
 import { ManualProspectModal } from '@/components/ManualProspectModal';
 import { CsvImportSection } from '@/components/CsvImportSection';
 import { LinkedInCsvGuideModal } from '@/components/LinkedInCsvGuideModal';
+import { WorkflowView, WorkflowType } from '@/components/WorkflowView';
 import {
   Sparkles,
   Zap,
@@ -41,6 +42,7 @@ import {
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
+  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowType | null>(null);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,28 +221,28 @@ export default function Home() {
   // 4 Main Use-case tiles
   const categoryTiles = [
     {
-      id: 'job-hunt',
+      id: 'job-hunt' as WorkflowType,
       title: 'DM for Job Hunt',
       subtitle: 'Target tech recruiters & hiring managers to land interviews.',
       icon: Briefcase,
       badge: 'Recruiters & Managers'
     },
     {
-      id: 'agency-leads',
+      id: 'agency-leads' as WorkflowType,
       title: 'DM for Agency Leads',
       subtitle: 'Pitch B2B clients, founders & CXOs directly.',
       icon: Target,
       badge: 'Founders & Business'
     },
     {
-      id: 'hire',
+      id: 'hire' as WorkflowType,
       title: 'DM to Hire',
       subtitle: 'Message top engineering talent & key hires.',
       icon: UserCheck,
       badge: 'Candidates'
     },
     {
-      id: 'freelancers',
+      id: 'freelancers' as WorkflowType,
       title: 'DM to Get Freelancers',
       subtitle: 'Find verified contractors, agency partners & freelancers.',
       icon: Laptop,
@@ -250,16 +252,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#f7f7f8] text-zinc-900 flex flex-col justify-between selection:bg-zinc-200">
-      {/* Fixed Header */}
+      {/* Clean Header */}
       <Header
         currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onOpenQuickAdd={() => setIsQuickAddOpen(false)}
-        onSelectCategoryNav={(catKey) => scrollToCsvUpload(catKey)}
-        pendingReviewCount={highPriorityProspects.length}
-        contactedCount={outreachLogs.length}
+        onTabChange={(tab) => {
+          setSelectedWorkflow(null);
+          setCurrentTab(tab);
+        }}
+        onBackToLanding={() => {
+          setSelectedWorkflow(null);
+          setCurrentTab('home');
+        }}
       />
 
       <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col relative pb-20 md:pb-8 px-4 sm:px-6 lg:px-8 pt-6">
@@ -267,62 +270,66 @@ export default function Home() {
           {/* TAB 1: HOME LANDING */}
           {currentTab === 'home' && (
             <div className="space-y-8 animate-in fade-in duration-200">
-              
-              {/* Hero Banner Header */}
-              <div className="text-center max-w-3xl mx-auto pt-2 pb-4 space-y-2.5">
-                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900">
-                  Every LinkedIn connection, one click away from a direct message.
-                </h1>
-                <p className="text-sm sm:text-base text-zinc-500 max-w-2xl mx-auto leading-relaxed">
-                  Upload your LinkedIn Connections CSV file and immediately generate tailored, human-sounding outreach for job hunting, agency leads, hiring, or freelancing.
-                </p>
-              </div>
-
-              {/* 4 Horizontal Rectangular Category Tiles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {categoryTiles.map((tile) => {
-                  const Icon = tile.icon;
-                  return (
-                    <div
-                      key={tile.id}
-                      onClick={() => scrollToCsvUpload(tile.id)}
-                      className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-5 shadow-sm cursor-pointer flex flex-col justify-between group transition-all"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="w-10 h-10 rounded-xl bg-zinc-100 group-hover:bg-zinc-900 text-zinc-700 group-hover:text-white flex items-center justify-center transition-colors">
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md">
-                            {tile.badge}
-                          </span>
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900 group-hover:text-zinc-800">
-                            {tile.title}
-                          </h3>
-                          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                            {tile.subtitle}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 mt-2 flex items-center justify-between text-xs font-semibold text-zinc-900 border-t border-zinc-100">
-                        <span>Upload CSV & Message</span>
-                        <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* CSV Upload Dropzone Section */}
-              <div className="pt-2">
-                <CsvImportSection
+              {selectedWorkflow ? (
+                /* Sub-page for Selected Workflow */
+                <WorkflowView
+                  workflow={selectedWorkflow}
+                  onBack={() => setSelectedWorkflow(null)}
                   onImportComplete={handleCsvImportComplete}
                   onOpenGuideModal={() => setIsGuideModalOpen(true)}
                 />
-              </div>
+              ) : (
+                /* Clean 4-Tile Landing Page (Nothing Below Tiles) */
+                <div className="space-y-8">
+                  {/* Hero Banner Header */}
+                  <div className="text-center max-w-3xl mx-auto pt-6 pb-2 space-y-3">
+                    <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900">
+                      Every LinkedIn connection, one click away from a direct message.
+                    </h1>
+                    <p className="text-sm sm:text-base text-zinc-500 max-w-2xl mx-auto leading-relaxed">
+                      Choose your outreach goal to start tailoring high-converting, human direct messages at scale.
+                    </p>
+                  </div>
+
+                  {/* 4 Horizontal Rectangular Category Tiles */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                    {categoryTiles.map((tile) => {
+                      const Icon = tile.icon;
+                      return (
+                        <div
+                          key={tile.id}
+                          onClick={() => setSelectedWorkflow(tile.id)}
+                          className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-6 shadow-sm cursor-pointer flex flex-col justify-between group transition-all"
+                        >
+                          <div className="space-y-3.5">
+                            <div className="flex items-center justify-between">
+                              <div className="w-10 h-10 rounded-xl bg-zinc-100 group-hover:bg-zinc-900 text-zinc-700 group-hover:text-white flex items-center justify-center transition-colors">
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md">
+                                {tile.badge}
+                              </span>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-zinc-900 group-hover:text-zinc-800">
+                                {tile.title}
+                              </h3>
+                              <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
+                                {tile.subtitle}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-4 mt-3 flex items-center justify-between text-xs font-semibold text-zinc-900 border-t border-zinc-100">
+                            <span>Get Started</span>
+                            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-1 transition-transform" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
