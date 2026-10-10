@@ -19,10 +19,20 @@ import {
   Calendar,
   X,
   Copy,
-  Check
+  Check,
+  ArrowUpDown
 } from 'lucide-react';
 import { Prospect, SegregationGroup } from '@/types';
 import { WorkflowType } from './WorkflowView';
+
+export type SortOption =
+  | 'score-desc'
+  | 'score-asc'
+  | 'name-asc'
+  | 'name-desc'
+  | 'date-desc'
+  | 'date-asc'
+  | 'contact-first';
 
 interface SegregatedConnectionsViewProps {
   workflow: WorkflowType;
@@ -51,6 +61,7 @@ export function SegregatedConnectionsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('All');
   const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>('score-desc');
 
   const handleCopyEmail = (e: React.MouseEvent, id: string, email: string) => {
     e.stopPropagation();
@@ -134,7 +145,7 @@ export function SegregatedConnectionsView({
 
   // Filtered & Prioritized Prospects
   const filtered = useMemo(() => {
-    return uniqueProspects.filter((p) => {
+    const list = uniqueProspects.filter((p) => {
       // Group filter
       if (activeGroup !== 'All' && p.segregationGroup !== activeGroup) {
         return false;
@@ -164,7 +175,43 @@ export function SegregatedConnectionsView({
 
       return true;
     });
-  }, [uniqueProspects, activeGroup, hasContactOnly, selectedCompany, searchQuery]);
+
+    return list.sort((a, b) => {
+      if (sortBy === 'score-desc') {
+        const diff = (b.score?.totalScore ?? 0) - (a.score?.totalScore ?? 0);
+        if (diff !== 0) return diff;
+        const aContact = a.email || a.phoneNumber ? 1 : 0;
+        const bContact = b.email || b.phoneNumber ? 1 : 0;
+        return bContact - aContact;
+      }
+      if (sortBy === 'score-asc') {
+        return (a.score?.totalScore ?? 0) - (b.score?.totalScore ?? 0);
+      }
+      if (sortBy === 'name-asc') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'name-desc') {
+        return b.name.localeCompare(a.name);
+      }
+      if (sortBy === 'date-desc') {
+        const dateA = a.connectedOn ? Date.parse(a.connectedOn) || 0 : 0;
+        const dateB = b.connectedOn ? Date.parse(b.connectedOn) || 0 : 0;
+        return dateB - dateA;
+      }
+      if (sortBy === 'date-asc') {
+        const dateA = a.connectedOn ? Date.parse(a.connectedOn) || 0 : 0;
+        const dateB = b.connectedOn ? Date.parse(b.connectedOn) || 0 : 0;
+        return dateA - dateB;
+      }
+      if (sortBy === 'contact-first') {
+        const aContact = a.email || a.phoneNumber ? 1 : 0;
+        const bContact = b.email || b.phoneNumber ? 1 : 0;
+        if (bContact !== aContact) return bContact - aContact;
+        return (b.score?.totalScore ?? 0) - (a.score?.totalScore ?? 0);
+      }
+      return 0;
+    });
+  }, [uniqueProspects, activeGroup, hasContactOnly, selectedCompany, searchQuery, sortBy]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -275,9 +322,10 @@ export function SegregatedConnectionsView({
         </div>
       </div>
 
-      {/* Search & Company Filter Bar */}
+      {/* Search & Filter Controls Bar */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-3 sm:p-3.5 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center gap-3">
+        <div className="flex flex-col lg:flex-row items-center gap-3">
+          {/* Search Input */}
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
@@ -297,20 +345,41 @@ export function SegregatedConnectionsView({
             )}
           </div>
 
-          {companies.length > 0 && (
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="w-full sm:w-56 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-zinc-800 focus:outline-none focus:border-zinc-400"
-            >
-              <option value="All">All Companies ({companies.length})</option>
-              {companies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+            {/* Sort Dropdown with Icon */}
+            <div className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 shrink-0 w-full sm:w-auto">
+              <ArrowUpDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="bg-transparent border-none text-xs font-semibold text-zinc-800 focus:outline-none cursor-pointer w-full sm:w-auto pr-1"
+              >
+                <option value="score-desc">Score: High to Low (Top Match)</option>
+                <option value="score-asc">Score: Low to High</option>
+                <option value="name-asc">Alphabetical (A → Z)</option>
+                <option value="name-desc">Alphabetical (Z → A)</option>
+                <option value="date-desc">Latest Connected</option>
+                <option value="date-asc">Oldest Connected</option>
+                <option value="contact-first">Has Email / Phone First</option>
+              </select>
+            </div>
+
+            {/* Company Filter Dropdown */}
+            {companies.length > 0 && (
+              <select
+                value={selectedCompany}
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                className="w-full sm:w-48 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-zinc-800 focus:outline-none focus:border-zinc-400 shrink-0"
+              >
+                <option value="All">All Companies ({companies.length})</option>
+                {companies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 
@@ -322,13 +391,14 @@ export function SegregatedConnectionsView({
             {activeGroup !== 'All' ? ` (${activeGroup === 'Founder' ? 'Founders & CXOs' : activeGroup === 'HR' ? 'HR & Recruiters' : 'Working Employees'})` : ''}
             {hasContactOnly ? ' · with Email/Phone' : ''}
           </span>
-          {(activeGroup !== 'All' || hasContactOnly || selectedCompany !== 'All' || searchQuery) && (
+          {(activeGroup !== 'All' || hasContactOnly || selectedCompany !== 'All' || searchQuery || sortBy !== 'score-desc') && (
             <button
               onClick={() => {
                 setActiveGroup('All');
                 setHasContactOnly(false);
                 setSelectedCompany('All');
                 setSearchQuery('');
+                setSortBy('score-desc');
               }}
               className="text-xs text-zinc-600 hover:text-zinc-900 underline font-medium cursor-pointer"
             >
@@ -337,7 +407,22 @@ export function SegregatedConnectionsView({
           )}
         </div>
         <span className="hidden sm:inline text-zinc-400">
-          Sorted: Contacts with Email & Phone First
+          Sorted by:{' '}
+          <strong className="text-zinc-700 font-semibold">
+            {sortBy === 'score-desc'
+              ? 'Highest Match Score'
+              : sortBy === 'score-asc'
+              ? 'Lowest Match Score'
+              : sortBy === 'name-asc'
+              ? 'Alphabetical (A → Z)'
+              : sortBy === 'name-desc'
+              ? 'Alphabetical (Z → A)'
+              : sortBy === 'date-desc'
+              ? 'Latest Connected'
+              : sortBy === 'date-asc'
+              ? 'Oldest Connected'
+              : 'Has Email / Phone First'}
+          </strong>
         </span>
       </div>
 

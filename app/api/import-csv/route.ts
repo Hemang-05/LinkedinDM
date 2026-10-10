@@ -164,8 +164,8 @@ export async function POST(request: Request) {
     }
     const t2 = performance.now();
 
-    // ---- 3. Sort with precomputed keys: contactable first, then by score ----
-    keyed.sort((a, b) => b.hasContact - a.hasContact || b.score - a.score);
+    // ---- 3. Sort with precomputed keys: highest match score first (descending), then contactable ----
+    keyed.sort((a, b) => b.score - a.score || b.hasContact - a.hasContact);
     const prospects = keyed.map((k) => k.p);
     const t3 = performance.now();
 
