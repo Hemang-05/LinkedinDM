@@ -74,28 +74,48 @@ export function SegregatedConnectionsView({
 
   const meta = getWorkflowTitle();
 
+  // Strictly deduplicate prospects by LinkedIn URL or name|company
+  const uniqueProspects = useMemo(() => {
+    const seen = new Set<string>();
+    const res: Prospect[] = [];
+    for (const p of prospects) {
+      if (p.name === 'Prospect' && (p.company === 'Startup' || p.jobTitle === 'Engineer')) {
+        continue;
+      }
+      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
+        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
+        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(p);
+      }
+    }
+    return res;
+  }, [prospects]);
+
   // Distinct companies for filtering
   const companies = useMemo(() => {
     const set = new Set<string>();
-    prospects.forEach((p) => {
+    uniqueProspects.forEach((p) => {
       if (p.company && p.company !== 'Startup') set.add(p.company);
     });
     return Array.from(set).slice(0, 30);
-  }, [prospects]);
+  }, [uniqueProspects]);
 
   // Group metrics
   const stats = useMemo(() => {
-    const total = prospects.length;
-    const founders = prospects.filter((p) => p.segregationGroup === 'Founder').length;
-    const hr = prospects.filter((p) => p.segregationGroup === 'HR').length;
-    const employees = prospects.filter((p) => p.segregationGroup === 'Employee').length;
-    const withContact = prospects.filter((p) => Boolean(p.email || p.phoneNumber)).length;
+    const total = uniqueProspects.length;
+    const founders = uniqueProspects.filter((p) => p.segregationGroup === 'Founder').length;
+    const hr = uniqueProspects.filter((p) => p.segregationGroup === 'HR').length;
+    const employees = uniqueProspects.filter((p) => p.segregationGroup === 'Employee').length;
+    const withContact = uniqueProspects.filter((p) => Boolean(p.email || p.phoneNumber)).length;
     return { total, founders, hr, employees, withContact };
-  }, [prospects]);
+  }, [uniqueProspects]);
 
   // Filtered & Prioritized Prospects
   const filtered = useMemo(() => {
-    return prospects.filter((p) => {
+    return uniqueProspects.filter((p) => {
       // Group filter
       if (activeGroup !== 'All' && p.segregationGroup !== activeGroup) {
         return false;
@@ -125,7 +145,7 @@ export function SegregatedConnectionsView({
 
       return true;
     });
-  }, [prospects, activeGroup, hasContactOnly, selectedCompany, searchQuery]);
+  }, [uniqueProspects, activeGroup, hasContactOnly, selectedCompany, searchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
