@@ -14,30 +14,30 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
   const isContacted = prospect.status === 'Contacted';
 
   const statusColors: Record<string, string> = {
-    'Not contacted': 'bg-zinc-100 text-zinc-600 border-zinc-200',
-    'Message drafted': 'bg-blue-50 text-blue-700 border-blue-200',
+    'Not contacted': 'bg-[#F4F2EE] text-zinc-600 border-[#E0DFDC]',
+    'Message drafted': 'bg-[#EBF3FB] text-[#0A66C2] border-[#C2E0F9]',
     'Approved': 'bg-amber-50 text-amber-700 border-amber-200',
-    'Contacted': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'Contacted': 'bg-[#057642]/10 text-[#057642] border-[#057642]/20',
     'Replied': 'bg-purple-50 text-purple-700 border-purple-200',
-    'Interested': 'bg-green-50 text-green-700 border-green-200',
+    'Interested': 'bg-[#057642]/10 text-[#057642] border-[#057642]/20',
     'Interview': 'bg-pink-50 text-pink-700 border-pink-200',
   };
 
-  const statusClass = statusColors[prospect.status] || 'bg-zinc-100 text-zinc-600 border-zinc-200';
+  const statusClass = statusColors[prospect.status] || 'bg-[#F4F2EE] text-zinc-600 border-[#E0DFDC]';
 
   return (
     <div
       onClick={() => onSelect(prospect)}
-      className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-6 shadow-sm cursor-pointer flex flex-col justify-between transition-all"
+      className="touch-card bg-white border border-[#E0DFDC] hover:border-[#0A66C2]/60 hover:shadow-md rounded-xl p-5 shadow-xs cursor-pointer flex flex-col justify-between transition-all group"
     >
       <div>
         <div className="flex items-start justify-between gap-2.5 mb-2.5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <h4 className="text-sm sm:text-base font-bold text-zinc-900 tracking-tight break-words">
+              <h4 className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-[#0A66C2] tracking-tight break-words transition-colors">
                 {prospect.name}
               </h4>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200 shrink-0">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F4F2EE] text-zinc-700 border border-[#E0DFDC] shrink-0">
                 {prospect.classification}
               </span>
             </div>
@@ -51,7 +51,7 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
           </div>
 
           <div className="flex flex-col items-end shrink-0">
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+            <span className="text-xs font-bold text-[#057642] bg-[#057642]/10 border border-[#057642]/20 px-2.5 py-0.5 rounded-full">
               {matchScore}%
             </span>
           </div>
@@ -69,15 +69,15 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
 
         {/* Hiring summary if exists */}
         {prospect.jobOpportunity && (
-          <div className="text-[11px] bg-zinc-50 rounded-lg p-2 border border-zinc-200/80 mb-2.5 text-zinc-700">
+          <div className="text-[11px] bg-[#F4F2EE]/40 rounded-lg p-2 border border-[#E0DFDC] mb-2.5 text-zinc-700">
             <span className="text-zinc-900 font-bold">Target Role: </span>
             {prospect.jobOpportunity.title}
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-3.5 border-t border-zinc-100 mt-3.5">
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${statusClass}`}>
+      <div className="flex items-center justify-between pt-3.5 border-t border-[#E0DFDC] mt-3.5">
+        <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusClass}`}>
           {prospect.status}
         </span>
 
@@ -86,9 +86,9 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
             e.stopPropagation();
             onSelect(prospect);
           }}
-          className="text-xs text-zinc-900 font-semibold flex items-center gap-1 hover:text-zinc-700"
+          className="text-xs text-[#0A66C2] hover:bg-[#0A66C2]/10 border border-[#0A66C2]/30 px-3 py-1.5 rounded-full font-semibold flex items-center gap-1 transition-colors"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-3.5 h-3.5 text-[#0A66C2]" />
           <span>{isContacted ? 'View Outreach' : 'Generate DM'}</span>
         </button>
       </div>

@@ -3,11 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --background: #f7f7f8;
-  --foreground: #18181b;
-  --card-bg: #ffffff;
-  --card-border: #e4e4e7;
-  --accent: #27272a;
+  --background: #F4F2EE;
+  --foreground: rgba(0, 0, 0, 0.9);
+  --card-bg: #FFFFFF;
+  --card-border: #E0DFDC;
+  --linkedin-blue: rgb(10, 102, 194);
+  --linkedin-hover: rgb(0, 65, 130);
+  --linkedin-light: #EBF3FB;
 }
 
 * {
@@ -21,7 +23,7 @@ body {
   padding: 0;
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-source-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   min-height: 100vh;
   min-height: -webkit-fill-available;
   overscroll-behavior-y: none;
@@ -38,8 +40,8 @@ body {
 
 /* Custom subtle scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -47,19 +49,63 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: #C7C5C0;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: #A09E99;
+}
+
+/* LinkedIn Card Styling */
+.linkedin-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E0DFDC;
+  border-radius: 12px;
+  box-shadow: 0px 0px 0px 1px rgba(140, 140, 140, 0.02), 0px 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 /* Smooth card transitions */
 .touch-card {
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.touch-card:hover {
+  border-color: #C7C5C0;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .touch-card:active {
-  transform: scale(0.985);
+  transform: scale(0.99);
+}
+
+/* LinkedIn Pill Buttons */
+.btn-linkedin-primary {
+  background-color: rgb(10, 102, 194);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.btn-linkedin-primary:hover {
+  background-color: rgb(0, 65, 130);
+}
+
+.btn-linkedin-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-linkedin-secondary {
+  background-color: transparent;
+  color: rgb(10, 102, 194);
+  border: 1.5px solid rgb(10, 102, 194);
+  font-weight: 600;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-linkedin-secondary:hover {
+  background-color: rgba(10, 102, 194, 0.08);
+  border-color: rgb(0, 65, 130);
 }

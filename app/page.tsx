@@ -303,7 +303,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] text-zinc-900 flex flex-col justify-between selection:bg-zinc-200">
+    <div className="min-h-screen bg-[#F4F2EE] text-zinc-900 flex flex-col justify-between selection:bg-[#0A66C2]/20">
       {/* Clean Header */}
       <Header
         currentTab={currentTab}
@@ -361,7 +361,7 @@ export default function Home() {
                     <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900">
                       Every LinkedIn connection, one click away from a direct message.
                     </h1>
-                    <p className="text-sm sm:text-base text-zinc-500 max-w-2xl mx-auto leading-relaxed">
+                    <p className="text-sm sm:text-base text-zinc-600 max-w-2xl mx-auto leading-relaxed">
                       Choose your outreach goal to start tailoring high-converting, human direct messages at scale.
                     </p>
                   </div>
@@ -377,19 +377,19 @@ export default function Home() {
                             setSelectedWorkflow(tile.id);
                             setWorkflowStep('upload');
                           }}
-                          className="touch-card bg-white border border-zinc-200 hover:border-zinc-400 rounded-2xl p-6 shadow-sm cursor-pointer flex flex-col justify-between group transition-all"
+                          className="touch-card bg-white border border-[#E0DFDC] hover:border-[#0A66C2] rounded-xl p-6 shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between group transition-all"
                         >
                           <div className="space-y-3.5">
                             <div className="flex items-center justify-between">
-                              <div className="w-10 h-10 rounded-xl bg-zinc-100 group-hover:bg-zinc-900 text-zinc-700 group-hover:text-white flex items-center justify-center transition-colors">
+                              <div className="w-10 h-10 rounded-xl bg-[#EBF3FB] group-hover:bg-[#0A66C2] text-[#0A66C2] group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
                                 <Icon className="w-5 h-5" />
                               </div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-[#F4F2EE] px-2.5 py-0.5 rounded-full border border-[#E0DFDC]">
                                 {tile.badge}
                               </span>
                             </div>
                             <div>
-                              <h3 className="text-sm font-bold text-zinc-900 group-hover:text-zinc-800">
+                              <h3 className="text-sm font-bold text-zinc-900 group-hover:text-[#0A66C2] transition-colors">
                                 {tile.title}
                               </h3>
                               <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
@@ -398,9 +398,9 @@ export default function Home() {
                             </div>
                           </div>
 
-                          <div className="pt-4 mt-3 flex items-center justify-between text-xs font-semibold text-zinc-900 border-t border-zinc-100">
-                            <span>Get Started</span>
-                            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-1 transition-transform" />
+                          <div className="pt-4 mt-3 flex items-center justify-between text-xs font-semibold text-[#0A66C2] border-t border-[#E0DFDC]">
+                            <span className="group-hover:underline">Get Started</span>
+                            <ChevronRight className="w-4 h-4 text-[#0A66C2] group-hover:translate-x-1 transition-transform" />
                           </div>
                         </div>
                       );
@@ -414,17 +414,17 @@ export default function Home() {
           {/* TAB 2: PROSPECTS */}
           {currentTab === 'prospects' && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[#E0DFDC] rounded-xl p-4 shadow-xs">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
                   <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Role:</span>
                   {['All', 'Founder', 'CEO', 'CTO', 'Engineering Manager', 'Recruiter'].map((role) => (
                     <button
                       key={role}
                       onClick={() => setClassificationFilter(role)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
                         classificationFilter === role
-                          ? 'bg-zinc-900 text-white shadow-sm'
-                          : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
+                          ? 'bg-[#0A66C2] text-white shadow-xs'
+                          : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
                       }`}
                     >
                       {role}
@@ -438,10 +438,10 @@ export default function Home() {
                     <button
                       key={st}
                       onClick={() => setProspectFilter(st)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
                         prospectFilter === st
-                          ? 'bg-zinc-800 text-white'
-                          : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
+                          ? 'bg-[#0A66C2] text-white shadow-xs'
+                          : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
                       }`}
                     >
                       {st}
@@ -563,7 +563,7 @@ export default function Home() {
           {/* TAB 4: OUTREACH CRM */}
           {currentTab === 'outreach' && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[#E0DFDC] rounded-xl p-4 shadow-xs">
                 <div>
                   <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
                     Outreach CRM & History
@@ -575,9 +575,9 @@ export default function Home() {
 
                 <button
                   onClick={downloadOutreachLogFile}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 px-3.5 py-2 rounded-xl transition-colors w-fit"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-[#0A66C2] bg-white hover:bg-[#0A66C2]/10 border border-[#0A66C2] px-3.5 py-1.5 rounded-full transition-colors w-fit"
                 >
-                  <Download className="w-4 h-4 text-zinc-700" />
+                  <Download className="w-4 h-4 text-[#0A66C2]" />
                   <span>Download outreach_log.txt</span>
                 </button>
               </div>
@@ -588,10 +588,10 @@ export default function Home() {
                   <button
                     key={chip}
                     onClick={() => setOutreachFilter(chip)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                       outreachFilter === chip
-                        ? 'bg-zinc-900 text-white shadow-sm'
-                        : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200'
+                        ? 'bg-[#0A66C2] text-white shadow-xs font-semibold'
+                        : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
                     }`}
                   >
                     {chip}
@@ -600,7 +600,7 @@ export default function Home() {
               </div>
 
               {filteredOutreachLogs.length === 0 ? (
-                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-sm space-y-2">
+                <div className="bg-white border border-[#E0DFDC] rounded-xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-xs space-y-2">
                   <Send className="w-10 h-10 text-zinc-300 mx-auto" />
                   <p className="font-bold text-zinc-900">No outreach history logged yet.</p>
                   <p className="text-xs text-zinc-500">When you send or copy DMs to your contacts, your activity log will appear here.</p>
@@ -624,10 +624,10 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Editable Profile Card */}
-                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="bg-white border border-[#E0DFDC] rounded-xl p-5 space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-[#E0DFDC] pb-3">
                     <h3 className="text-sm sm:text-base font-bold text-zinc-900 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-zinc-700" />
+                      <Users className="w-4 h-4 text-[#0A66C2]" />
                       <span>Candidate / User Profile</span>
                     </h3>
                     <button
@@ -635,7 +635,7 @@ export default function Home() {
                         if (isEditingProfile) handleSaveProfile();
                         else setIsEditingProfile(true);
                       }}
-                      className="text-xs font-semibold px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white flex items-center gap-1 transition-colors"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white flex items-center gap-1 transition-colors shadow-2xs"
                     >
                       {isEditingProfile ? (
                         <>
@@ -659,7 +659,7 @@ export default function Home() {
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                          className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
                         />
                       </div>
 
@@ -669,7 +669,7 @@ export default function Home() {
                           type="text"
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                          className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
                         />
                       </div>
 
@@ -680,7 +680,7 @@ export default function Home() {
                           value={editTargetRole}
                           onChange={(e) => setEditTargetRole(e.target.value)}
                           placeholder="e.g. Full Stack Engineer"
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                          className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
                         />
                       </div>
 
@@ -690,7 +690,7 @@ export default function Home() {
                           type="text"
                           value={editSkills}
                           onChange={(e) => setEditSkills(e.target.value)}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                          className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
                         />
                       </div>
                     </div>
@@ -698,15 +698,15 @@ export default function Home() {
                     <div className="text-xs sm:text-sm space-y-2 text-zinc-700">
                       <p><span className="text-zinc-400 font-medium">Name: </span><strong className="text-zinc-900">{userProfile.name}</strong></p>
                       <p><span className="text-zinc-400 font-medium">Title: </span>{userProfile.title}</p>
-                      <p><span className="text-zinc-400 font-medium">Target Role Seeking: </span><span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">{userProfile.targetRole || 'Full Stack Engineer'}</span></p>
+                      <p><span className="text-zinc-400 font-medium">Target Role Seeking: </span><span className="font-semibold text-[#0A66C2] bg-[#EBF3FB] px-2 py-0.5 rounded-full border border-[#0A66C2]/20">{userProfile.targetRole || 'Full Stack Engineer'}</span></p>
                       <p><span className="text-zinc-400 font-medium">Target Roles Pool: </span>{userProfile.targetRoles.join(', ')}</p>
-                      <div className="pt-2 border-t border-zinc-100">
+                      <div className="pt-2 border-t border-[#E0DFDC]">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
                           Your Technical Skills
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {userProfile.skills.map((s, idx) => (
-                            <span key={idx} className="text-xs bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-lg border border-zinc-200">
+                            <span key={idx} className="text-xs bg-[#F4F2EE] text-zinc-700 px-2.5 py-1 rounded-full border border-[#E0DFDC]">
                               {s}
                             </span>
                           ))}
@@ -717,14 +717,14 @@ export default function Home() {
                 </div>
 
                 {/* Storage & Export Card */}
-                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4 flex flex-col justify-between shadow-sm">
+                <div className="bg-white border border-[#E0DFDC] rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-xs">
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                    <div className="flex items-center justify-between border-b border-[#E0DFDC] pb-3">
                       <h3 className="text-sm sm:text-base font-bold text-zinc-900 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-600" />
+                        <FileText className="w-4 h-4 text-[#0A66C2]" />
                         <span>Client Storage & Exports</span>
                       </h3>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="text-xs font-semibold text-[#057642] bg-[#057642]/10 px-2.5 py-0.5 rounded-full border border-[#057642]/20">
                         {outreachLogs.length} Logged
                       </span>
                     </div>
@@ -735,7 +735,7 @@ export default function Home() {
 
                   <button
                     onClick={downloadOutreachLogFile}
-                    className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    className="w-full py-2.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-2xs"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download outreach_log.txt</span>

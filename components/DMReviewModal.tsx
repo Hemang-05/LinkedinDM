@@ -289,13 +289,13 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-zinc-200/80 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-[#E0DFDC] overflow-hidden">
         {/* Modal Top Header */}
-        <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-white shrink-0">
+        <div className="px-5 py-4 border-b border-[#E0DFDC] flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-zinc-900 tracking-tight">Direct Message Generator</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border tracking-wide uppercase ${strategyMeta.tagColor}`}>
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${strategyMeta.tagColor}`}>
               {strategyMeta.badge}
             </span>
           </div>
@@ -310,49 +310,49 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-4 text-zinc-900">
           {duplicateWarning && (
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{duplicateWarning}</span>
             </div>
           )}
 
           {logSuccess && (
-            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2 animate-in fade-in">
-              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="p-3.5 rounded-xl bg-[#057642]/10 border border-[#057642]/20 text-[#057642] text-xs font-medium flex items-center gap-2 animate-in fade-in">
+              <Check className="w-4 h-4 text-[#057642] shrink-0" />
               <span>Logged as contacted! Outreach record updated successfully.</span>
             </div>
           )}
 
           {/* Interactive Return Prompt: Triggered when user returns from LinkedIn */}
           {showReturnPrompt && prospect.status !== 'Contacted' && (
-            <div className="p-4 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 text-xs space-y-2.5 animate-in slide-in-from-top-2 duration-200 shadow-sm">
+            <div className="p-4 rounded-xl bg-white border border-[#E0DFDC] text-xs space-y-2.5 animate-in slide-in-from-top-2 duration-200 shadow-md">
               <div className="flex items-center justify-between">
-                <div className="font-bold text-emerald-950 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                <div className="font-bold text-zinc-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#0A66C2]" />
                   <span>Welcome back! Did you send the DM to {firstName}?</span>
                 </div>
                 <button
                   onClick={() => setShowReturnPrompt(false)}
-                  className="text-emerald-700 hover:text-emerald-900 text-[11px] font-semibold"
+                  className="text-zinc-400 hover:text-zinc-700 text-[11px] font-semibold"
                 >
                   Dismiss
                 </button>
               </div>
-              <p className="text-[11px] text-emerald-800 leading-relaxed">
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
                 Single click to mark as contacted and update your outreach log.
               </p>
               <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={handleConfirmContacted}
                   disabled={isLogging}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98]"
+                  className="flex-1 py-2.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98]"
                 >
                   <Check className="w-4 h-4 stroke-[2.5px]" />
                   <span>{isLogging ? 'Logging...' : 'Yes, Mark as Contacted'}</span>
                 </button>
                 <button
                   onClick={() => setShowReturnPrompt(false)}
-                  className="py-2.5 px-3 rounded-xl bg-white border border-emerald-200 text-emerald-800 text-xs font-semibold hover:bg-emerald-100/50 transition-colors"
+                  className="py-2.5 px-4 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold transition-colors"
                 >
                   Not yet
                 </button>
@@ -361,7 +361,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           )}
 
           {/* Section 1: Person & Company Card */}
-          <div className="bg-zinc-50/80 rounded-2xl p-4 sm:p-5 border border-zinc-200/90 flex items-start justify-between gap-4 shadow-2xs">
+          <div className="bg-[#F4F2EE]/40 rounded-xl p-4 sm:p-5 border border-[#E0DFDC] flex items-start justify-between gap-4 shadow-2xs">
             <div className="min-w-0 space-y-1">
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                 Contact & Role
@@ -383,12 +383,12 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                 Match
               </span>
-              <div className="text-2xl font-black text-emerald-600 mt-0.5">
+              <div className="text-2xl font-black text-[#057642] mt-0.5">
                 {matchScore}%
               </div>
               <button
                 onClick={() => setShowScoreDetails(!showScoreDetails)}
-                className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 flex items-center gap-1 mt-1 transition-colors"
+                className="text-xs font-semibold text-[#0A66C2] hover:underline flex items-center gap-1 mt-1 transition-colors"
               >
                 <span>Why</span>
                 {showScoreDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -398,17 +398,17 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
           {/* Section 2: Expandable Score Breakdown */}
           {showScoreDetails && prospect.score && (
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-zinc-200 text-xs space-y-3.5 shadow-xs animate-in fade-in duration-150">
-              <div className="font-semibold text-zinc-800 flex items-center gap-1.5 pb-1 border-b border-zinc-100">
-                <Info className="w-4 h-4 text-zinc-500" />
+            <div className="bg-white rounded-xl p-4 sm:p-5 border border-[#E0DFDC] text-xs space-y-3.5 shadow-2xs animate-in fade-in duration-150">
+              <div className="font-semibold text-zinc-800 flex items-center gap-1.5 pb-1 border-b border-[#E0DFDC]">
+                <Info className="w-4 h-4 text-[#0A66C2]" />
                 <span className="text-xs font-bold">Transparent Scoring Breakdown</span>
               </div>
 
               <div className="space-y-2">
                 {prospect.score.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-zinc-50">
+                  <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-[#E0DFDC]/50">
                     <span className="text-zinc-600">{item.category}</span>
-                    <span className={`font-semibold ${item.matched ? 'text-emerald-700' : 'text-zinc-400'}`}>
+                    <span className={`font-semibold ${item.matched ? 'text-[#057642]' : 'text-zinc-400'}`}>
                       +{item.points} / {item.maxPoints} pts
                     </span>
                   </div>
@@ -418,17 +418,17 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           )}
 
           {/* Section 3: Outreach Strategy & Target Opportunity */}
-          <div className="bg-zinc-50/80 rounded-2xl p-4 sm:p-4.5 border border-zinc-200/90 space-y-3">
+          <div className="bg-[#F4F2EE]/40 rounded-xl p-4 sm:p-4.5 border border-[#E0DFDC] space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <Briefcase className="w-3.5 h-3.5 text-zinc-600" />
+                <Briefcase className="w-3.5 h-3.5 text-[#0A66C2]" />
                 <span className="text-xs font-bold text-zinc-900">
                   Opportunity You Are Seeking
                 </span>
               </div>
               <button
                 onClick={() => setIsCustomRole(!isCustomRole)}
-                className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 underline transition-colors"
+                className="text-[11px] font-semibold text-[#0A66C2] hover:underline transition-colors"
               >
                 {isCustomRole ? 'Choose preset' : 'Custom title'}
               </button>
@@ -440,7 +440,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                 value={targetRole}
                 onChange={(e) => handleTargetRoleChange(e.target.value)}
                 placeholder="e.g. Senior Full Stack Engineer"
-                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 font-semibold focus:outline-none focus:border-zinc-400"
+                className="w-full bg-white border border-[#E0DFDC] rounded-xl px-3 py-2 text-xs text-zinc-900 font-semibold focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
               />
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -448,10 +448,10 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
                   <button
                     key={role}
                     onClick={() => handleTargetRoleChange(role)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                       targetRole === role
-                        ? 'bg-zinc-900 text-white shadow-xs'
-                        : 'bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-100'
+                        ? 'bg-[#0A66C2] text-white shadow-xs'
+                        : 'bg-white text-zinc-700 border border-[#E0DFDC] hover:border-[#0A66C2] hover:text-[#0A66C2]'
                     }`}
                   >
                     {role}
@@ -460,7 +460,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               </div>
             )}
 
-            <div className="pt-2 border-t border-zinc-200/70 text-xs text-zinc-600 space-y-1">
+            <div className="pt-2 border-t border-[#E0DFDC] text-xs text-zinc-600 space-y-1">
               <div className="font-semibold text-zinc-900 flex items-center gap-1">
                 <span>Strategy:</span>
                 <span>{strategyMeta.title}</span>
@@ -476,27 +476,27 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block px-0.5">
               Outreach Sequence Touchpoint
             </span>
-            <div className="flex rounded-xl bg-zinc-100 p-1.5 gap-1 border border-zinc-200/80">
+            <div className="flex rounded-full bg-[#F4F2EE] p-1 gap-1 border border-[#E0DFDC]">
               <button
                 onClick={() => setActiveTab('day0')}
-                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
-                  activeTab === 'day0' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                className={`flex-1 py-1.5 text-xs rounded-full transition-all ${
+                  activeTab === 'day0' ? 'bg-[#0A66C2] text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-[#0A66C2] font-semibold'
                 }`}
               >
                 Day 0 (Initial)
               </button>
               <button
                 onClick={() => setActiveTab('day5')}
-                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
-                  activeTab === 'day5' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                className={`flex-1 py-1.5 text-xs rounded-full transition-all ${
+                  activeTab === 'day5' ? 'bg-[#0A66C2] text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-[#0A66C2] font-semibold'
                 }`}
               >
                 Day 5 Follow-up
               </button>
               <button
                 onClick={() => setActiveTab('day12')}
-                className={`flex-1 py-2 text-xs rounded-lg transition-colors ${
-                  activeTab === 'day12' ? 'bg-zinc-900 text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-zinc-900 font-medium'
+                className={`flex-1 py-1.5 text-xs rounded-full transition-all ${
+                  activeTab === 'day12' ? 'bg-[#0A66C2] text-white font-semibold shadow-xs' : 'text-zinc-600 hover:text-[#0A66C2] font-semibold'
                 }`}
               >
                 Day 12 Final
@@ -508,12 +508,12 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs px-0.5">
               <div className="flex items-center gap-1.5 font-semibold text-zinc-600">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-500" />
+                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0A66C2]" />
                 <span>Outreach Angle / Pitch Hook</span>
               </div>
               <button
                 onClick={handleResetToDefaultTemplate}
-                className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 flex items-center gap-1 transition-colors"
+                className="text-[11px] font-semibold text-[#0A66C2] hover:underline flex items-center gap-1 transition-colors"
                 title="Reset message to clean template"
               >
                 <RotateCcw className="w-3 h-3" />
@@ -523,17 +523,17 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
               {[
                 { id: 'standard' as MessageAngle, label: 'Standard / Adaptive' },
-                { id: 'founding' as MessageAngle, label: 'Founding 0→1 Ownership' },
+                { id: 'founding' as MessageAngle, label: 'Founding 0→1' },
                 { id: 'ai_rag' as MessageAngle, label: 'Full Stack AI / RAG' },
                 { id: 'product_ownership' as MessageAngle, label: 'Product & Autonomy' }
               ].map((opt) => (
                 <button
                   key={opt.id}
                   onClick={() => handleSwitchAngle(opt.id)}
-                  className={`py-2 px-3 rounded-xl text-[11px] transition-all text-left truncate ${
+                  className={`py-2 px-3 rounded-full text-[11px] transition-all text-center truncate ${
                     selectedAngle === opt.id
-                      ? 'bg-zinc-900 text-white font-semibold shadow-xs'
-                      : 'bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200 text-zinc-700 font-medium'
+                      ? 'bg-[#0A66C2] text-white font-semibold shadow-xs'
+                      : 'bg-white hover:bg-[#F4F2EE] border border-[#E0DFDC] text-zinc-700 hover:border-[#0A66C2] hover:text-[#0A66C2] font-medium'
                   }`}
                 >
                   {opt.label}
@@ -546,7 +546,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between text-xs px-0.5">
               <span className="font-bold uppercase tracking-wider text-zinc-700">Generated Message</span>
-              <span className={`text-[11px] font-medium ${wordCount >= 50 && wordCount <= 120 ? 'text-emerald-700 font-semibold' : 'text-zinc-500'}`}>
+              <span className={`text-[11px] font-medium ${wordCount >= 50 && wordCount <= 120 ? 'text-[#057642] font-semibold' : 'text-zinc-500'}`}>
                 {wordCount} words (Target: 50–100)
               </span>
             </div>
@@ -555,7 +555,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
               value={message}
               onChange={(e) => handleMessageChange(e.target.value)}
               rows={8}
-              className="w-full bg-zinc-50 text-zinc-900 text-xs sm:text-sm rounded-2xl p-4 border border-zinc-200 focus:outline-none focus:border-zinc-400 focus:bg-white leading-relaxed font-sans shadow-2xs min-h-[160px]"
+              className="w-full bg-[#F4F2EE]/30 text-zinc-900 text-xs sm:text-sm rounded-xl p-4 border border-[#E0DFDC] focus:outline-none focus:border-[#0A66C2] focus:bg-white focus:ring-1 focus:ring-[#0A66C2] leading-relaxed font-sans shadow-2xs min-h-[160px] transition-colors"
               placeholder="Draft your personalized message..."
             />
           </div>
@@ -565,18 +565,18 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             {/* 1-Click Power Action: Copy DM and open LinkedIn tab */}
             <button
               onClick={handleCopyAndOpenProfile}
-              className="w-full py-4 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg transition-all"
+              className="w-full py-3.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all"
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
               <span>Copy DM & Open Profile (1-Click)</span>
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-blue-200" />
             </button>
 
             {/* Notification when copied */}
             {copied && (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between text-emerald-900 animate-in fade-in duration-150">
+              <div className="p-3.5 rounded-xl bg-[#057642]/10 border border-[#057642]/20 text-xs flex items-center justify-between text-[#057642] animate-in fade-in duration-150">
                 <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 stroke-[3px]" />
+                  <Check className="w-4 h-4 text-[#057642] stroke-[3px]" />
                   <span>
                     DM copied! Open chat with {firstName} and paste (<strong>⌘V</strong> / <strong>Ctrl+V</strong>).
                   </span>
@@ -588,15 +588,15 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             <div className="grid grid-cols-2 gap-2 pt-0.5">
               <button
                 onClick={handleCopy}
-                className="py-2.5 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-1.5 transition-colors"
+                className="py-2.5 px-3 rounded-full bg-white hover:bg-[#0A66C2]/10 text-[#0A66C2] text-xs font-semibold border border-[#0A66C2] flex items-center justify-center gap-1.5 transition-colors"
               >
-                <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                <Copy className="w-3.5 h-3.5 text-[#0A66C2]" />
                 <span>Copy Only</span>
               </button>
 
               <button
                 onClick={handleInitiateContacted}
-                className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                className="py-2.5 px-3 rounded-full bg-white hover:bg-[#057642]/10 text-[#057642] text-xs font-semibold border border-[#057642] flex items-center justify-center gap-1.5 transition-colors"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{prospect.status === 'Contacted' ? 'Contacted ✓' : 'Mark Contacted'}</span>
@@ -609,7 +609,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
       {/* Confirmation Sub-Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-5 max-w-xs w-full shadow-2xl space-y-3.5 animate-in zoom-in-95 duration-150">
+          <div className="bg-white border border-[#E0DFDC] rounded-2xl p-5 max-w-xs w-full shadow-2xl space-y-3.5 animate-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-zinc-900 text-center">
               Confirm Contact Log
             </h3>
@@ -623,14 +623,14 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="py-2 rounded-xl bg-zinc-100 text-zinc-700 text-xs font-semibold hover:bg-zinc-200 transition-colors border border-zinc-200"
+                className="py-2 rounded-full bg-white text-zinc-700 text-xs font-semibold hover:bg-[#F4F2EE] transition-colors border border-[#E0DFDC]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmContacted}
                 disabled={isLogging}
-                className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1 transition-all"
+                className="py-2 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-1 transition-all"
               >
                 {isLogging ? 'Logging...' : 'Confirm'}
               </button>

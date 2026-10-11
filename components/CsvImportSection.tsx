@@ -60,11 +60,11 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
   };
 
   return (
-    <div id="csv-upload-section" className="bg-white border border-zinc-200/80 rounded-2xl p-6 shadow-sm space-y-4 transition-all">
+    <div id="csv-upload-section" className="bg-white border border-[#E0DFDC] rounded-xl p-6 shadow-xs space-y-4 transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-zinc-900 flex items-center gap-2">
-            <Upload className="w-4 h-4 text-zinc-700" />
+            <Upload className="w-4 h-4 text-[#0A66C2]" />
             <span>Upload LinkedIn Connections CSV</span>
           </h3>
           <p className="text-xs text-zinc-500 mt-0.5">
@@ -74,9 +74,9 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
 
         <button
           onClick={handleDownloadSample}
-          className="self-start sm:self-auto text-xs text-zinc-700 hover:text-zinc-900 font-medium flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 px-3 py-1.5 rounded-xl transition-colors"
+          className="self-start sm:self-auto text-xs text-[#0A66C2] hover:bg-[#0A66C2]/10 font-semibold flex items-center gap-1.5 bg-white border border-[#0A66C2] px-3.5 py-1.5 rounded-full transition-colors"
         >
-          <Download className="w-3.5 h-3.5 text-zinc-600" />
+          <Download className="w-3.5 h-3.5 text-[#0A66C2]" />
           <span>Sample CSV</span>
         </button>
       </div>
@@ -88,16 +88,16 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
       )}
 
       {successCount !== null && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-[#057642]/10 border border-[#057642]/20 text-[#057642] text-xs font-medium flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-[#057642] shrink-0" />
           <span>Successfully imported and scored {successCount} prospects!</span>
         </div>
       )}
 
       {/* iLovePDF-Style Dropzone */}
       <div className="relative">
-        <label className="border-2 border-dashed border-zinc-300 hover:border-zinc-500 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-zinc-50/50 hover:bg-zinc-100/50 group">
-          <div className="w-12 h-12 rounded-full bg-zinc-200/80 group-hover:bg-zinc-300/80 flex items-center justify-center text-zinc-700 mb-3 transition-colors">
+        <label className="border-2 border-dashed border-[#E0DFDC] hover:border-[#0A66C2] rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#F4F2EE]/30 hover:bg-[#F4F2EE]/70 group">
+          <div className="w-12 h-12 rounded-full bg-[#EBF3FB] group-hover:bg-[#0A66C2] flex items-center justify-center text-[#0A66C2] group-hover:text-white mb-3 transition-colors shadow-2xs">
             <FileText className="w-6 h-6" />
           </div>
           <span className="text-xs font-bold text-zinc-900">
@@ -120,9 +120,9 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1 px-1">
         <button
           onClick={onOpenGuideModal}
-          className="text-xs italic text-zinc-500 hover:text-zinc-900 flex items-center gap-1.5 transition-colors group"
+          className="text-xs text-zinc-600 hover:text-[#0A66C2] flex items-center gap-1.5 transition-colors group"
         >
-          <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-700" />
+          <HelpCircle className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#0A66C2]" />
           <span>How to retrieve your LinkedIn Connections CSV file?</span>
           <ArrowRight className="w-3 h-3 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
         </button>

@@ -10,6 +10,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        linkedin: {
+          DEFAULT: "rgb(10, 102, 194)",
+          blue: "rgb(10, 102, 194)",
+          hover: "rgb(0, 65, 130)",
+          active: "#095196",
+          light: "#EBF3FB",
+          bg: "#F4F2EE",
+          border: "#E0DFDC",
+          card: "#FFFFFF",
+          text: "rgba(0, 0, 0, 0.9)",
+          muted: "rgba(0, 0, 0, 0.6)"
+        },
         brand: {
           50: "#eef2ff",
           100: "#e0e7ff",
@@ -24,7 +36,17 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        sans: [
+          "var(--font-source-sans)",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "'Segoe UI'",
+          "Roboto",
+          "'Helvetica Neue'",
+          "Arial",
+          "sans-serif"
+        ],
+        logo: ["'Avenir Black'", "'Avenir Next'", "Arial Black", "sans-serif"],
       },
       screens: {
         xs: "375px",

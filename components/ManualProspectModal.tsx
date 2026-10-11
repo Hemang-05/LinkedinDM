@@ -71,18 +71,16 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-[#0f172a] border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
-        <div className="w-12 h-1.5 bg-slate-700/80 rounded-full mx-auto mt-2.5 mb-1 sm:hidden" />
-
-        <div className="flex items-center justify-between px-5 pt-3 pb-3 border-b border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white border border-[#E0DFDC] rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#E0DFDC]">
           <div className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-indigo-400" />
-            <h2 className="text-sm font-bold text-white">Add Prospect / Opportunity</h2>
+            <UserPlus className="w-4 h-4 text-[#0A66C2]" />
+            <h2 className="text-sm font-bold text-zinc-900">Add Prospect / Opportunity</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-[#F4F2EE] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -90,13 +88,13 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
 
         <form onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto safe-pb text-xs">
           {error && (
-            <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-medium">
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 font-medium">
               {error}
             </div>
           )}
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
               Contact Name *
             </label>
             <input
@@ -105,13 +103,13 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Rahul Sharma"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
                 Company *
               </label>
               <input
@@ -120,11 +118,11 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 placeholder="e.g. ABC AI"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+              <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
                 Position / Title
               </label>
               <input
@@ -132,13 +130,13 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
                 placeholder="e.g. Founder & CEO"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
               LinkedIn Profile URL
             </label>
             <input
@@ -146,12 +144,12 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
               value={linkedinUrl}
               onChange={(e) => setLinkedinUrl(e.target.value)}
               placeholder="https://linkedin.com/in/username"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
               Role Being Hired For
             </label>
             <input
@@ -159,12 +157,12 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
               value={jobTitleOpening}
               onChange={(e) => setJobTitleOpening(e.target.value)}
               placeholder="e.g. Full Stack AI Engineer"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
               Location & Remote Status
             </label>
             <input
@@ -172,12 +170,12 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="Remote India"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            <label className="text-[11px] font-semibold text-zinc-600 block mb-1">
               Notes / Hiring Signals
             </label>
             <textarea
@@ -185,7 +183,7 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Posted 'We are hiring Full Stack Engineers with Next.js & Python'"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
             />
           </div>
 
@@ -193,7 +191,7 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all"
+              className="w-full py-2.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all"
             >
               {isSubmitting ? 'Analyzing & Scoring...' : 'Save Prospect & Generate DM'}
             </button>

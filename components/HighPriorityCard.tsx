@@ -18,12 +18,12 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
   const isTopMatch = matchScore >= 90;
 
   return (
-    <div className="touch-card bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4.5 shadow-sm flex flex-col justify-between relative overflow-hidden group transition-all">
+    <div className="touch-card bg-white border border-[#E0DFDC] hover:border-[#0A66C2]/60 hover:shadow-md rounded-xl p-5 shadow-xs flex flex-col justify-between relative overflow-hidden group transition-all">
       <div>
         {/* Header row: Person & Match Badge */}
         <div className="flex items-start justify-between gap-3 mb-2.5">
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-zinc-900 tracking-tight truncate group-hover:text-zinc-700 transition-colors">
+            <h3 className="text-base font-bold text-zinc-900 tracking-tight truncate group-hover:text-[#0A66C2] transition-colors">
               {prospect.name}
             </h3>
             <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-0.5 truncate">
@@ -39,8 +39,8 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
           {/* Match Score Badge */}
           <div className={`flex flex-col items-end flex-shrink-0 px-2.5 py-1 rounded-xl border ${
             isTopMatch
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-zinc-100 border-zinc-200 text-zinc-800'
+              ? 'bg-[#057642]/10 border-[#057642]/20 text-[#057642]'
+              : 'bg-[#F4F2EE] border-[#E0DFDC] text-zinc-800'
           }`}>
             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Match</span>
             <span className="text-sm font-black tracking-tight leading-none mt-0.5">
@@ -50,7 +50,7 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
         </div>
 
         {/* Hiring Opportunity */}
-        <div className="bg-zinc-50 rounded-xl p-2.5 border border-zinc-200/80 mb-3">
+        <div className="bg-[#F4F2EE]/40 rounded-xl p-2.5 border border-[#E0DFDC] mb-3">
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-700 mb-1">
             <Zap className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
             <span>Target Role</span>
@@ -71,7 +71,7 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
             {prospect.score.strongMatches.slice(0, 4).map((tech) => (
               <span
                 key={tech}
-                className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200"
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F4F2EE] text-zinc-700 border border-[#E0DFDC]"
               >
                 ✓ {tech}
               </span>
@@ -88,11 +88,11 @@ export function HighPriorityCard({ prospect, onReviewDM }: HighPriorityCardProps
       {/* Primary CTA Button */}
       <button
         onClick={() => onReviewDM(prospect)}
-        className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+        className="w-full py-2.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-all"
       >
         <Sparkles className="w-3.5 h-3.5" />
         <span>Review DM</span>
-        <ChevronRight className="w-3.5 h-3.5 ml-auto text-zinc-400" />
+        <ChevronRight className="w-3.5 h-3.5 ml-auto text-blue-200" />
       </button>
     </div>
   );
