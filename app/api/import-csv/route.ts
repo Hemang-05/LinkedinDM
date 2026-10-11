@@ -36,8 +36,10 @@ const FUZZY: Record<string, RegExp> = {
 export async function POST(request: Request) {
   const t0 = performance.now();
   try {
-    const csvContent = await readCsvFromRequest(request);
-    if (typeof csvContent !== 'string') return csvContent; // error response
+    const parsedReq = await readCsvFromRequest(request);
+    if (parsedReq instanceof NextResponse) return parsedReq;
+
+    const { csvContent, targetRole = 'Full Stack Engineer' } = parsedReq;
 
     // ---- 1. Parse (single pass) ----
     const rows = parseCSV(csvContent);
@@ -139,11 +141,11 @@ export async function POST(request: Request) {
         updatedAt: now,
         jobOpportunity: {
           id: `j-${batch}-${i}`,
-          title: jobTitle,
+          title: targetRole,
           company,
           location,
           remoteStatus: 'Remote India',
-          description: `Connection at ${company} with title ${jobTitle}`,
+          description: `${cls.segregationGroup} contact at ${company} for ${targetRole}`,
           source: 'LinkedIn CSV Import',
           hiringSignals: hiring ? ['Hiring Lead'] : [],
           requiredSkills: REQUIRED_SKILLS,
@@ -196,7 +198,11 @@ export async function POST(request: Request) {
 }
 
 /** Accepts multipart FormData (field "file") or legacy JSON { csvContent }. */
-async function readCsvFromRequest(request: Request): Promise<string | NextResponse> {
+async function readCsvFromRequest(request: Request): Promise<{
+  csvContent: string;
+  targetRole?: string;
+  workflow?: string;
+} | NextResponse> {
   const tooLarge = () =>
     NextResponse.json({ success: false, error: 'CSV file is too large (max 10 MB)' }, { status: 413 });
   const contentType = request.headers.get('content-type') || '';
@@ -204,19 +210,24 @@ async function readCsvFromRequest(request: Request): Promise<string | NextRespon
   if (contentType.includes('multipart/form-data')) {
     const form = await request.formData();
     const file = form.get('file');
+    const targetRole = (form.get('targetRole') as string) || undefined;
+    const workflow = (form.get('workflow') as string) || undefined;
+
     if (!file || typeof file === 'string') {
       return NextResponse.json({ success: false, error: 'A CSV file is required' }, { status: 400 });
     }
     if (file.size > MAX_FILE_BYTES) return tooLarge();
-    return file.text();
+    const csvContent = await file.text();
+    return { csvContent, targetRole, workflow };
   }
 
-  const { csvContent } = await request.json();
+  const json = await request.json();
+  const { csvContent, targetRole, workflow } = json || {};
   if (!csvContent || typeof csvContent !== 'string') {
     return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
   }
   if (csvContent.length > MAX_FILE_BYTES) return tooLarge();
-  return csvContent;
+  return { csvContent, targetRole, workflow };
 }
 
 function buildColumnMap(headers: string[]): Record<string, number> {

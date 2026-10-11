@@ -89,7 +89,15 @@ export function getClientProfile(): UserProfile {
     const data = localStorage.getItem(PROFILE_STORAGE_KEY);
     if (!data) return DEFAULT_PROFILE;
     const parsed = JSON.parse(data);
-    return parsed && parsed.name ? parsed : DEFAULT_PROFILE;
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_PROFILE;
+
+    const name = (!parsed.name || parsed.name === 'Your Name') ? DEFAULT_PROFILE.name : parsed.name;
+    return {
+      ...DEFAULT_PROFILE,
+      ...parsed,
+      name,
+      targetRole: parsed.targetRole || DEFAULT_PROFILE.targetRole || 'Full Stack Engineer'
+    };
   } catch (err) {
     return DEFAULT_PROFILE;
   }

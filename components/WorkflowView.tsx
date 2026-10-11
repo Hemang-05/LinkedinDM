@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Prospect } from '@/types';
+import { getClientProfile, saveClientProfile } from '@/lib/clientStorage';
 
 export type WorkflowType = 'job-hunt' | 'agency-leads' | 'hire' | 'freelancers';
 
@@ -35,6 +36,13 @@ export function WorkflowView({
   // State for secondary files (Resume / JD / Project brief)
   const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
   const [targetSector, setTargetSector] = useState('');
+  const [targetRole, setTargetRole] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return getClientProfile().targetRole || 'Full Stack Engineer';
+    }
+    return 'Full Stack Engineer';
+  });
+  const [isCustomTargetRole, setIsCustomTargetRole] = useState(false);
   
   // CSV upload state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -117,6 +125,12 @@ export function WorkflowView({
       form.append('file', csvFile);
       form.append('workflow', workflow);
       if (targetSector) form.append('targetSector', targetSector);
+
+      if (workflow === 'job-hunt') {
+        const prof = getClientProfile();
+        saveClientProfile({ ...prof, targetRole });
+        form.append('targetRole', targetRole);
+      }
 
       const res = await fetch('/api/import-csv', { method: 'POST', body: form });
 
@@ -231,6 +245,63 @@ export function WorkflowView({
                 className="hidden"
               />
             </label>
+
+            {workflow === 'job-hunt' && (
+              <div className="pt-3 border-t border-zinc-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5 text-zinc-700" />
+                    <span className="text-xs font-bold text-zinc-900">
+                      Target Role / Opportunity You Are Seeking
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomTargetRole(!isCustomTargetRole)}
+                    className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 underline"
+                  >
+                    {isCustomTargetRole ? 'Choose preset' : 'Type custom'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  Prevents confusion between your goals and connections&apos; personal positions. Outreach will ask for referrals from employees, active openings from recruiters, and technical spots from founders.
+                </p>
+
+                {isCustomTargetRole ? (
+                  <input
+                    type="text"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    placeholder="e.g. Senior Full Stack Engineer"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 font-semibold focus:outline-none focus:border-zinc-400"
+                  />
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {[
+                      'Full Stack Engineer',
+                      'Software Engineer',
+                      'Frontend Engineer',
+                      'Backend Engineer',
+                      'AI Engineer',
+                      'Founding Engineer'
+                    ].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setTargetRole(r)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          targetRole === r
+                            ? 'bg-zinc-900 text-white shadow-xs'
+                            : 'bg-zinc-100 text-zinc-700 border border-zinc-200 hover:bg-zinc-200/70'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

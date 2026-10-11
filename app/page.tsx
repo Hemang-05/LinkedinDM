@@ -55,6 +55,7 @@ export default function Home() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(userProfile.name);
   const [editTitle, setEditTitle] = useState(userProfile.title);
+  const [editTargetRole, setEditTargetRole] = useState(userProfile.targetRole || userProfile.targetRoles?.[0] || 'Full Stack Engineer');
   const [editSkills, setEditSkills] = useState(userProfile.skills.join(', '));
 
   // Modals
@@ -100,6 +101,7 @@ export default function Home() {
     setUserProfile(localProf);
     setEditName(localProf.name);
     setEditTitle(localProf.title);
+    setEditTargetRole(localProf.targetRole || localProf.targetRoles?.[0] || 'Full Stack Engineer');
     setEditSkills(localProf.skills.join(', '));
   }, []);
 
@@ -107,8 +109,9 @@ export default function Home() {
     const updatedSkills = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
     const updated: UserProfile = {
       ...userProfile,
-      name: editName || 'Your Name',
-      title: editTitle || 'Software Engineer',
+      name: editName || 'Hemang Mehta',
+      title: editTitle || 'Full Stack / AI Engineer',
+      targetRole: editTargetRole || userProfile.targetRole || 'Full Stack Engineer',
       skills: updatedSkills.length > 0 ? updatedSkills : userProfile.skills
     };
     setUserProfile(updated);
@@ -670,6 +673,17 @@ export default function Home() {
                       </div>
 
                       <div>
+                        <label className="block text-zinc-500 font-medium mb-1">Target Role / Opportunity You Are Seeking</label>
+                        <input
+                          type="text"
+                          value={editTargetRole}
+                          onChange={(e) => setEditTargetRole(e.target.value)}
+                          placeholder="e.g. Full Stack Engineer"
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 text-xs focus:outline-none focus:border-zinc-400"
+                        />
+                      </div>
+
+                      <div>
                         <label className="block text-zinc-500 font-medium mb-1">Key Skills (comma separated)</label>
                         <input
                           type="text"
@@ -683,7 +697,8 @@ export default function Home() {
                     <div className="text-xs sm:text-sm space-y-2 text-zinc-700">
                       <p><span className="text-zinc-400 font-medium">Name: </span><strong className="text-zinc-900">{userProfile.name}</strong></p>
                       <p><span className="text-zinc-400 font-medium">Title: </span>{userProfile.title}</p>
-                      <p><span className="text-zinc-400 font-medium">Target Roles: </span>{userProfile.targetRoles.join(', ')}</p>
+                      <p><span className="text-zinc-400 font-medium">Target Role Seeking: </span><span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">{userProfile.targetRole || 'Full Stack Engineer'}</span></p>
+                      <p><span className="text-zinc-400 font-medium">Target Roles Pool: </span>{userProfile.targetRoles.join(', ')}</p>
                       <div className="pt-2 border-t border-zinc-100">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
                           Your Technical Skills

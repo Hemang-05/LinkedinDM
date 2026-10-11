@@ -124,4 +124,6 @@ export interface UserProfile {
   targetRoles: string[];
   targetLocations: string[];
   bioSummary: string;
+  targetRole?: string;
+  startupExperienceSummary?: string;
 }
