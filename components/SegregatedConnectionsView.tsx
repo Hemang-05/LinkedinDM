@@ -103,7 +103,7 @@ export function SegregatedConnectionsView({
     openLinkedInTab(p.linkedinUrl, p.name, p.company);
 
     // 2. Generate persona-aware DM
-    const generated = generatePersonalizedDM(p, targetRole, 'standard', prof);
+    const generated = generatePersonalizedDM(p, targetRole, 'standard', prof, workflow);
     const msg = p.draftedMessage || generated.day0;
 
     // 3. Write to clipboard

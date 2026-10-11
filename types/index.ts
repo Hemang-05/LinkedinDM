@@ -6,6 +6,8 @@ export type ProspectClassification =
   | 'Engineering Manager'
   | 'Hiring Manager'
   | 'Recruiter'
+  | 'Freelancer'
+  | 'Contractor'
   | 'Other';
 
 export type RelationshipType =
@@ -18,7 +20,19 @@ export type RelationshipType =
   | 'Recruiter'
   | 'Hiring Manager'
   | 'Peer'
+  | 'Freelancer'
+  | 'Consultant'
   | 'Other';
+
+export type OutreachGoal = 'job-hunt' | 'agency-leads' | 'hire' | 'freelancers';
+
+export type PersonaType =
+  | 'founder'
+  | 'recruiter'
+  | 'employee'
+  | 'cto_lead'
+  | 'freelancer'
+  | 'other';
 
 export type OutreachStatus =
   | 'Not contacted'
@@ -86,6 +100,8 @@ export interface Prospect {
   segregationGroup: SegregationGroup;
   classification: ProspectClassification;
   relationshipType: RelationshipType;
+  persona?: PersonaType;
+  outreachGoal?: OutreachGoal;
   
   // Associated Job / Hiring Info
   jobOpportunity?: JobOpportunity;
@@ -121,9 +137,18 @@ export interface UserProfile {
   title: string;
   yearsOfExperience: number;
   skills: string[];
+  primarySkills?: string[];
+  secondarySkills?: string[];
   targetRoles: string[];
   targetLocations: string[];
   bioSummary: string;
   targetRole?: string;
+  location?: string;
+  workPreference?: 'Remote' | 'Hybrid' | 'On-site' | 'Any';
+  background?: string;
   startupExperienceSummary?: string;
+  relevantExperience?: string;
+  agencyName?: string;
+  agencyServiceSummary?: string;
+  agencyOffering?: string;
 }

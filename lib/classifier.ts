@@ -1,4 +1,4 @@
-import { ProspectClassification, RelationshipType, SegregationGroup } from '@/types';
+import { Prospect, ProspectClassification, RelationshipType, SegregationGroup, PersonaType } from '@/types';
 
 export type ClassificationResult = {
   classification: ProspectClassification;
@@ -18,8 +18,10 @@ const RECRUITER_RE =
 const ENG_MANAGER_RE =
   /engineering manager|\bem\b|vp,? (of )?engineering|head of engineering|director of engineering|lead engineer|tech lead/;
 const HIRING_MANAGER_RE = /hiring manager|hiring lead/;
+const FREELANCER_RE =
+  /\b(freelanc|freelancer|contractor|consultant|independent (engineer|developer|contractor|consultant)|fractional|interim)\b/;
 const PEER_RE =
-  /engineer|developer|full stack|frontend|backend|architect|product manager|designer|analyst|consultant|specialist/;
+  /engineer|developer|full stack|frontend|backend|architect|product manager|designer|analyst|specialist/;
 
 // Interns, students and freshers: they can't hire or refer, so they're excluded at import
 const STUDENT_RE =
@@ -67,9 +69,88 @@ export function classifyProspectTitle(title: string, headline?: string): Classif
     return { classification: 'Hiring Manager', relationshipType: 'Hiring Manager', segregationGroup: 'HR', priorityScore: 9 };
   }
 
+  if (FREELANCER_RE.test(text)) {
+    return { classification: 'Freelancer', relationshipType: 'Freelancer', segregationGroup: 'Employee', priorityScore: 6 };
+  }
+
   if (PEER_RE.test(text)) {
     return { classification: 'Other', relationshipType: 'Peer', segregationGroup: 'Employee', priorityScore: 5 };
   }
 
   return { classification: 'Other', relationshipType: 'Other', segregationGroup: 'Employee', priorityScore: 3 };
+}
+
+/**
+ * Resolves the explicit outreach persona from prospect fields and titles.
+ */
+export function resolveProspectPersona(prospect: Partial<Prospect>): PersonaType {
+  if (prospect.persona) return prospect.persona;
+
+  const classification = (prospect.classification || '').toLowerCase();
+  const relationship = (prospect.relationshipType || '').toLowerCase();
+  const group = (prospect.segregationGroup || '').toLowerCase();
+  const text = `${prospect.jobTitle || ''} ${prospect.headline || ''} ${prospect.notes || ''}`.toLowerCase();
+
+  // 1. Founder / Co-Founder / CEO / Owner
+  if (
+    classification === 'founder' ||
+    classification === 'co-founder' ||
+    classification === 'ceo' ||
+    relationship === 'founder' ||
+    relationship === 'co-founder' ||
+    relationship === 'ceo' ||
+    COFOUNDER_RE.test(text) ||
+    FOUNDER_RE.test(text) ||
+    CEO_RE.test(text)
+  ) {
+    return 'founder';
+  }
+
+  // 2. CTO / VP Engineering / Engineering Manager / Tech Lead (High-value Technical Decision Maker)
+  if (
+    classification === 'cto' ||
+    classification === 'engineering manager' ||
+    relationship === 'cto' ||
+    relationship === 'engineering manager' ||
+    CXO_RE.test(text) ||
+    ENG_MANAGER_RE.test(text)
+  ) {
+    return 'cto_lead';
+  }
+
+  // 3. Recruiter / HR / Talent Acquisition
+  if (
+    classification === 'recruiter' ||
+    classification === 'hiring manager' ||
+    relationship === 'recruiter' ||
+    relationship === 'hr' ||
+    relationship === 'hiring manager' ||
+    group === 'hr' ||
+    RECRUITER_RE.test(text) ||
+    HIRING_MANAGER_RE.test(text)
+  ) {
+    return 'recruiter';
+  }
+
+  // 4. Freelancer / Contractor / Consultant
+  if (
+    classification === 'freelancer' ||
+    classification === 'contractor' ||
+    relationship === 'freelancer' ||
+    relationship === 'consultant' ||
+    FREELANCER_RE.test(text)
+  ) {
+    return 'freelancer';
+  }
+
+  // 5. Engineering Employee / Peer
+  if (
+    relationship === 'peer' ||
+    group === 'employee' ||
+    PEER_RE.test(text)
+  ) {
+    return 'employee';
+  }
+
+  return 'employee';
 }

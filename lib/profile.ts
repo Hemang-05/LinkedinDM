@@ -2,8 +2,23 @@ import type { UserProfile } from '@/types';
 
 export const DEFAULT_PROFILE: UserProfile = {
   name: 'Hemang Mehta',
-  title: 'Full Stack / AI Engineer',
+  title: 'Full Stack Engineer',
   yearsOfExperience: 3,
+  primarySkills: [
+    'React',
+    'Next.js',
+    'TypeScript',
+    'Python',
+    'FastAPI',
+    'PostgreSQL'
+  ],
+  secondarySkills: [
+    'Docker',
+    'Redis',
+    'TailwindCSS',
+    'LLM/RAG',
+    'REST APIs'
+  ],
   skills: [
     'React',
     'Next.js',
@@ -17,20 +32,30 @@ export const DEFAULT_PROFILE: UserProfile = {
   targetRoles: [
     'Full Stack Engineer',
     'Software Engineer',
-    'AI Engineer',
-    'Product Engineer',
-    'Founding Engineer'
+    'Founding Engineer',
+    'Product Engineer'
   ],
   targetRole: 'Full Stack Engineer',
   targetLocations: [
     'Remote',
     'Hybrid / On-site'
   ],
+  location: 'Remote / India',
+  workPreference: 'Remote',
+  background: 'Startup / product development',
   bioSummary:
-    'Full Stack & AI Engineer with 3+ years of experience building web applications and production AI workflows.',
+    'Full Stack Engineer with 3+ years of experience building products across React, Next.js, and Python in fast-paced startup environments.',
   startupExperienceSummary:
-    'Worked at 2 fast-paced startups delivering end-to-end production systems with 0-to-1 ownership.'
+    'Experienced in early-stage startups taking products from 0 to 1 with end-to-end ownership.',
+  relevantExperience:
+    'Building and shipping production systems, end-to-end feature delivery, and scalable APIs.',
+  agencyName: 'Product Engineering Studio',
+  agencyServiceSummary:
+    'small product development team helping startups build and ship web/mobile products without needing to immediately build a full engineering team',
+  agencyOffering:
+    'building and shipping production MVPs, feature roadmaps, and automation'
 };
 
 // Fallback profile export
 export const MY_PROFILE = DEFAULT_PROFILE;
+

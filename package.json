@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsc -p tsconfig.test.json && node scratch_test/scripts/run-tests.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",

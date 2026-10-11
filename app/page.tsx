@@ -764,6 +764,7 @@ export default function Home() {
           prospect={selectedProspect}
           onClose={() => setSelectedProspect(null)}
           onProspectUpdated={handleProspectUpdated}
+          workflow={selectedWorkflow || 'job-hunt'}
         />
 
         {/* Quick Add Prospect Modal */}
