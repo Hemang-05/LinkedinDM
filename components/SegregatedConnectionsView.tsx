@@ -20,10 +20,18 @@ import {
   X,
   Copy,
   Check,
-  ArrowUpDown
+  ArrowUpDown,
+  Zap
 } from 'lucide-react';
 import { Prospect, SegregationGroup } from '@/types';
 import { WorkflowType } from './WorkflowView';
+import { copyTextToClipboard, openLinkedInTab } from '@/lib/clipboard';
+import {
+  getClientProfile,
+  appendClientOutreachLog,
+  updateClientProspect
+} from '@/lib/clientStorage';
+import { generatePersonalizedDM } from '@/lib/generator';
 
 export type SortOption =
   | 'score-desc'
@@ -40,6 +48,7 @@ interface SegregatedConnectionsViewProps {
   onBack: () => void;
   onReset?: () => void;
   onReviewDM: (prospect: Prospect) => void;
+  onProspectUpdated?: (updated: Prospect) => void;
 }
 
 function getInitials(name: string): string {
@@ -54,14 +63,107 @@ export function SegregatedConnectionsView({
   prospects,
   onBack,
   onReset,
-  onReviewDM
+  onReviewDM,
+  onProspectUpdated
 }: SegregatedConnectionsViewProps) {
   const [activeGroup, setActiveGroup] = useState<'All' | SegregationGroup>('All');
   const [hasContactOnly, setHasContactOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('All');
   const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null);
+  const [copiedDMId, setCopiedDMId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('score-desc');
+  const [lastOpenedProspect, setLastOpenedProspect] = useState<Prospect | null>(null);
+  const [showQuickReturnPrompt, setShowQuickReturnPrompt] = useState(false);
+  const [isLoggingQuick, setIsLoggingQuick] = useState(false);
+
+  // Detect when user returns from LinkedIn tab
+  React.useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === 'visible' && lastOpenedProspect && lastOpenedProspect.status !== 'Contacted') {
+        setShowQuickReturnPrompt(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleReturn);
+    window.addEventListener('focus', handleReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', handleReturn);
+      window.removeEventListener('focus', handleReturn);
+    };
+  }, [lastOpenedProspect]);
+
+  const handleQuickCopyAndOpen = async (p: Prospect) => {
+    const prof = getClientProfile();
+    const targetRole =
+      p.jobOpportunity?.title && p.jobOpportunity.title !== p.jobTitle
+        ? p.jobOpportunity.title
+        : prof.targetRole || prof.targetRoles?.[0] || 'Full Stack Engineer';
+
+    // 1. Synchronously open LinkedIn
+    openLinkedInTab(p.linkedinUrl, p.name, p.company);
+
+    // 2. Generate persona-aware DM
+    const generated = generatePersonalizedDM(p, targetRole, 'standard', prof);
+    const msg = p.draftedMessage || generated.day0;
+
+    // 3. Write to clipboard
+    await copyTextToClipboard(msg);
+    setCopiedDMId(p.id);
+    setTimeout(() => setCopiedDMId(null), 3000);
+
+    // 4. Save drafted message
+    updateClientProspect(p.id, p.status, msg);
+
+    // 5. Set tracking prospect
+    setLastOpenedProspect(p);
+  };
+
+  const handleConfirmQuickContacted = async () => {
+    if (!lastOpenedProspect) return;
+    setIsLoggingQuick(true);
+    const today = new Date().toISOString().split('T')[0];
+    const prof = getClientProfile();
+    const role =
+      lastOpenedProspect.jobOpportunity?.title && lastOpenedProspect.jobOpportunity.title !== lastOpenedProspect.jobTitle
+        ? lastOpenedProspect.jobOpportunity.title
+        : prof.targetRole || prof.targetRoles?.[0] || 'Full Stack Engineer';
+
+    const logEntry = {
+      date: today,
+      name: lastOpenedProspect.name,
+      company: lastOpenedProspect.company,
+      role,
+      personPosition: lastOpenedProspect.jobTitle,
+      relationshipType: lastOpenedProspect.relationshipType,
+      linkedinUrl: lastOpenedProspect.linkedinUrl,
+      status: 'Contacted' as const
+    };
+
+    appendClientOutreachLog(logEntry);
+    updateClientProspect(lastOpenedProspect.id, 'Contacted', lastOpenedProspect.draftedMessage);
+
+    try {
+      await fetch('/api/outreach-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'append',
+          prospectId: lastOpenedProspect.id,
+          ...logEntry
+        })
+      });
+    } catch {}
+
+    const updated = {
+      ...lastOpenedProspect,
+      status: 'Contacted' as const,
+      lastContactedDate: today
+    };
+    onProspectUpdated?.(updated);
+    setIsLoggingQuick(false);
+    setShowQuickReturnPrompt(false);
+    setLastOpenedProspect(null);
+  };
 
   const handleCopyEmail = (e: React.MouseEvent, id: string, email: string) => {
     e.stopPropagation();
@@ -557,28 +659,78 @@ export function SegregatedConnectionsView({
                 </div>
 
                 {/* Bottom Action Row */}
-                <div className="pt-4.5 mt-4.5 border-t border-zinc-100 flex items-center justify-between gap-2">
-                  <a
-                    href={prospect.linkedinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-zinc-500 hover:text-zinc-900 font-medium flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-zinc-100 transition-colors"
-                  >
-                    <span>LinkedIn Profile</span>
-                    <ExternalLink className="w-3 h-3 text-zinc-400" />
-                  </a>
-
+                <div className="pt-4 mt-4 border-t border-zinc-100 flex items-center justify-between gap-2">
                   <button
                     onClick={() => onReviewDM(prospect)}
-                    className="py-2 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-[0.98]"
+                    className="text-xs text-zinc-600 hover:text-zinc-900 font-medium flex items-center gap-1.5 py-1.5 px-2 rounded-lg hover:bg-zinc-100 transition-colors"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Review & Send DM</span>
+                    <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Review DM</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickCopyAndOpen(prospect)}
+                    className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-[0.98] ${
+                      prospect.status === 'Contacted'
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : copiedDMId === prospect.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                    }`}
+                  >
+                    {copiedDMId === prospect.id ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3px]" />
+                        <span>Copied & Opened ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                        <span>{prospect.status === 'Contacted' ? 'Contacted ✓' : 'Copy & Open Profile'}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Floating Prompt on Returning from LinkedIn */}
+      {showQuickReturnPrompt && lastOpenedProspect && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-white border-2 border-emerald-300 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-4 duration-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              Did you send the DM to {lastOpenedProspect.name.split(' ')[0]}?
+            </span>
+            <button
+              onClick={() => setShowQuickReturnPrompt(false)}
+              className="text-zinc-400 hover:text-zinc-600 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            Click to mark as contacted and update your outreach log.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleConfirmQuickContacted}
+              disabled={isLoggingQuick}
+              className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+            >
+              <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+              <span>{isLoggingQuick ? 'Logging...' : 'Yes, Mark Contacted'}</span>
+            </button>
+            <button
+              onClick={() => setShowQuickReturnPrompt(false)}
+              className="py-2 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
     </div>

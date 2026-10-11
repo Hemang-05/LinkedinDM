@@ -349,6 +349,7 @@ export default function Home() {
                     setWorkflowStep('upload');
                   }}
                   onReviewDM={(p) => setSelectedProspect(p)}
+                  onProspectUpdated={handleProspectUpdated}
                 />
               )}
 

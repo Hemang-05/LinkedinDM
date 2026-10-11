@@ -10,6 +10,7 @@ import {
   saveClientProfile
 } from '@/lib/clientStorage';
 import { generatePersonalizedDM, MessageAngle } from '@/lib/generator';
+import { copyTextToClipboard, openLinkedInTab } from '@/lib/clipboard';
 import {
   X,
   Copy,
@@ -23,7 +24,9 @@ import {
   SlidersHorizontal,
   Briefcase,
   Users,
-  RotateCcw
+  RotateCcw,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 
 interface DMReviewModalProps {
@@ -48,6 +51,10 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
   const [isCustomRole, setIsCustomRole] = useState(false);
 
   const [message, setMessage] = useState(prospect?.draftedMessage || '');
+
+  // 1-Click Copy & Open Profile tracking state
+  const [openedTabForOutreach, setOpenedTabForOutreach] = useState(false);
+  const [showReturnPrompt, setShowReturnPrompt] = useState(false);
 
   // Duplicate Check & Confirmation State
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -124,8 +131,27 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
     setCopied(false);
     setDuplicateWarning(null);
     setLogSuccess(prospect.status === 'Contacted');
+    setOpenedTabForOutreach(false);
+    setShowReturnPrompt(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prospect, activeTab]);
+
+  // Listen for user returning to tab after viewing LinkedIn
+  useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === 'visible' && openedTabForOutreach && prospect && prospect.status !== 'Contacted') {
+        setShowReturnPrompt(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleReturn);
+    window.addEventListener('focus', handleReturn);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleReturn);
+      window.removeEventListener('focus', handleReturn);
+    };
+  }, [openedTabForOutreach, prospect]);
 
   if (!prospect) return null;
 
@@ -170,19 +196,32 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
     updateClientProspect(prospect.id, prospect.status, newMsg);
   };
 
+  // 1-Click Action: Copies DM to clipboard and immediately opens LinkedIn Profile in new tab
+  const handleCopyAndOpenProfile = async () => {
+    // 1. Synchronously open window inside click event to guarantee no popup blocking
+    openLinkedInTab(prospect.linkedinUrl, prospect.name, prospect.company);
+
+    // 2. Write to clipboard
+    const success = await copyTextToClipboard(message);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 4000);
+    }
+
+    // 3. Mark that tab was opened for outreach
+    setOpenedTabForOutreach(true);
+  };
+
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(message);
+    const success = await copyTextToClipboard(message);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 3500);
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
     }
   };
 
   const handleOpenLinkedIn = () => {
-    const targetUrl = prospect.linkedinUrl || `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(prospect.name + ' ' + prospect.company)}`;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    openLinkedInTab(prospect.linkedinUrl, prospect.name, prospect.company);
   };
 
   const handleInitiateContacted = async () => {
@@ -228,6 +267,7 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
     } catch {}
 
     setShowConfirmModal(false);
+    setShowReturnPrompt(false);
     setLogSuccess(true);
     const updated = {
       ...prospect,
@@ -277,9 +317,46 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
           )}
 
           {logSuccess && (
-            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2 animate-in fade-in">
               <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Logged as contacted! Ready to proceed.</span>
+              <span>Logged as contacted! Outreach record updated successfully.</span>
+            </div>
+          )}
+
+          {/* Interactive Return Prompt: Triggered when user returns from LinkedIn */}
+          {showReturnPrompt && prospect.status !== 'Contacted' && (
+            <div className="p-4 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 text-xs space-y-2.5 animate-in slide-in-from-top-2 duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Welcome back! Did you send the DM to {firstName}?</span>
+                </div>
+                <button
+                  onClick={() => setShowReturnPrompt(false)}
+                  className="text-emerald-700 hover:text-emerald-900 text-[11px] font-semibold"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                Single click to mark as contacted and update your outreach log.
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={handleConfirmContacted}
+                  disabled={isLogging}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-[0.98]"
+                >
+                  <Check className="w-4 h-4 stroke-[2.5px]" />
+                  <span>{isLogging ? 'Logging...' : 'Yes, Mark as Contacted'}</span>
+                </button>
+                <button
+                  onClick={() => setShowReturnPrompt(false)}
+                  className="py-2.5 px-3 rounded-xl bg-white border border-emerald-200 text-emerald-800 text-xs font-semibold hover:bg-emerald-100/50 transition-colors"
+                >
+                  Not yet
+                </button>
+              </div>
             </div>
           )}
 
@@ -485,52 +562,46 @@ export function DMReviewModal({ prospect, onClose, onProspectUpdated }: DMReview
 
           {/* Action Buttons Section */}
           <div className="space-y-3 pt-2">
+            {/* 1-Click Power Action: Copy DM and open LinkedIn tab */}
             <button
-              onClick={handleCopy}
-              className={`w-full py-3.5 px-4 rounded-xl active:scale-[0.98] text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all ${
-                copied
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-white'
-              }`}
+              onClick={handleCopyAndOpenProfile}
+              className="w-full py-4 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 active:scale-[0.98] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg transition-all"
             >
-              {copied ? <Check className="w-4 h-4 stroke-[3px]" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? 'Copied to Clipboard ✓' : 'Copy DM to Clipboard'}</span>
+              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+              <span>Copy DM & Open Profile (1-Click)</span>
+              <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
             </button>
 
-            {copied ? (
-              <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs space-y-2.5 animate-in fade-in duration-200">
-                <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  <span>DM copied. Open LinkedIn and send it.</span>
+            {/* Notification when copied */}
+            {copied && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between text-emerald-900 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 stroke-[3px]" />
+                  <span>
+                    DM copied! Open chat with {firstName} and paste (<strong>⌘V</strong> / <strong>Ctrl+V</strong>).
+                  </span>
                 </div>
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  Open {firstName}&apos;s LinkedIn page, paste your message into the chat, and hit send.
-                </p>
-                <button
-                  onClick={handleOpenLinkedIn}
-                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open LinkedIn Profile</span>
-                </button>
               </div>
-            ) : (
-              <button
-                onClick={handleOpenLinkedIn}
-                className="w-full py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-2 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
-                <span>Open LinkedIn Profile Externally</span>
-              </button>
             )}
 
-            <button
-              onClick={handleInitiateContacted}
-              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all mt-1"
-            >
-              <Send className="w-4 h-4" />
-              <span>Mark as Contacted</span>
-            </button>
+            {/* Sub-actions Row */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                onClick={handleCopy}
+                className="py-2.5 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-semibold border border-zinc-200 flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                <span>Copy Only</span>
+              </button>
+
+              <button
+                onClick={handleInitiateContacted}
+                className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{prospect.status === 'Contacted' ? 'Contacted ✓' : 'Mark Contacted'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
