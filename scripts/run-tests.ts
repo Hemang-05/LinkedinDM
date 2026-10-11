@@ -302,6 +302,11 @@ for (const tc of testCases) {
     }
   }
 
+  if (result.day0.includes('—') || result.day5.includes('—') || result.day12.includes('—')) {
+    tcPass = false;
+    errors.push(`Contained forbidden em dash (—) in message sequence`);
+  }
+
   for (const notInc of tc.checks.mustNotInclude || []) {
     if (lower.includes(notInc.toLowerCase())) {
       tcPass = false;

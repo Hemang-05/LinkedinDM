@@ -239,6 +239,15 @@ export function validateMessageQuality(
     }
   }
 
+  // 4b. Check for em dashes (—)
+  if (text.includes('—')) {
+    issues.push({
+      rule: 'no-em-dash',
+      severity: 'error',
+      message: 'Message must not contain em dashes (—).'
+    });
+  }
+
   // 5. Goal & Persona integrity checks
   if (context.goal === 'agency-leads') {
     if (lower.includes('my resume') || lower.includes('send my resume') || lower.includes('attach my cv')) {
@@ -311,7 +320,7 @@ Came across ${hasSpecificCompany ? companyName : 'your company'} and really like
 
 I'm a ${targetRole} with ${expText} of experience in early-stage startups, comfortable owning systems from 0 to 1 and moving fast through ambiguity.
 
-I'm currently exploring new engineering opportunities and wanted to ask — are you looking to add a hands-on technical builder to the team?
+I'm currently exploring new engineering opportunities and wanted to ask: are you looking to add a hands-on technical builder to the team?
 
 If you're exploring additions, I'd love to chat briefly and see if there could be a fit.
 
@@ -322,7 +331,7 @@ ${senderName}`;
     if (angle === 'ai_rag') {
       return `Hi ${firstName},
 
-I've been following ${compRef} — really compelling product direction.
+I've been following ${compRef}. Really compelling product direction.
 
 I'm a ${targetRole} with ${expText} of experience building web applications and production AI/RAG workflows that solve real user problems.
 
@@ -341,7 +350,7 @@ Came across ${hasSpecificCompany ? companyName : 'your team'} and really appreci
 
 I'm a ${targetRole} with ${expText} of experience, focused on high-autonomy product development where engineers talk to users and ship features end-to-end.
 
-I'm currently exploring opportunities and wanted to ask — are you looking to bring on an engineer who can own features with minimal overhead?
+I'm currently exploring opportunities and wanted to ask: are you looking to bring on an engineer who can own features with minimal overhead?
 
 Would be glad to have a quick conversation if that fits your current plans.
 
@@ -352,11 +361,11 @@ ${senderName}`;
     // Standard Founder
     return `Hi ${firstName},
 
-I've been following ${compRef} — really interesting space.
+I've been following ${compRef}. Really interesting space.
 
 I'm a ${targetRole} with ${expText} of experience, mostly working with startups and building products end-to-end.
 
-I'm currently exploring engineering opportunities and wanted to ask — are you looking to add someone technical to the team?
+I'm currently exploring engineering opportunities and wanted to ask: are you looking to add someone technical to the team?
 
 If yes, I'd love to have a quick conversation and see if there could be a fit.
 
@@ -403,7 +412,7 @@ ${senderName}`;
 
 I came across your profile while looking into the engineering group${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience, focused on strong product ownership — handling everything from schema design to production deployment with minimal management friction.
+I'm a ${targetRole} with ${expText} of experience, focused on strong product ownership, handling everything from schema design to production deployment with minimal management friction.
 
 I'm exploring new roles and wanted to ask if you're looking to bring on someone technical who can take full feature ownership across ${shortStack}.
 
@@ -530,7 +539,7 @@ Came across your profile while exploring the engineering team${compRef}.
 
 I'm a ${targetRole} with ${expText} of experience building and shipping features end-to-end with ${primaryStack}.
 
-I'm currently looking for new opportunities and wanted to check — if there are open engineering roles, would you be comfortable putting in a referral?
+I'm currently looking for new opportunities and wanted to check: if there are open engineering roles, would you be comfortable putting in a referral?
 
 Glad to share my resume or work samples anytime.
 
@@ -567,7 +576,7 @@ Came across your profile while looking into the engineering team at ${compName}.
 
 I run a product engineering studio that partners with tech teams to help tackle backlog features and integrations when internal sprints are overloaded.
 
-Wanted to reach out directly to see how your team handles roadmap spillover — open to connecting if having on-demand engineering support is ever useful.
+Wanted to reach out directly to see how your team handles roadmap spillover. Open to connecting if having on-demand engineering support is ever useful.
 
 Thanks,
 ${senderName}`;
@@ -776,7 +785,7 @@ function buildDay5FollowUp(ctx: MessageContext): string {
 
 Following up on my previous note.
 
-If roadmap overflow or external product engineering is on your radar this quarter, happy to share 2–3 quick project teardowns. No pressure either way!
+If roadmap overflow or external product engineering is on your radar this quarter, happy to share 2-3 quick project teardowns. No pressure either way!
 
 Best,
 ${senderName}`;
@@ -798,7 +807,7 @@ ${senderName}`;
 
 Following up to see if you have any availability for contract or freelance projects in the coming weeks?
 
-No rush at all — happy to share the scope whenever convenient.
+No rush at all, happy to share the scope whenever convenient.
 
 Best,
 ${senderName}`;
@@ -869,7 +878,7 @@ ${senderName}`;
   if (goal === 'hire') {
     return `Hi ${firstName},
 
-Last note from my side — understand you might be happily settled in your current role.
+Last note from my side. Understand you might be happily settled in your current role.
 
 If you ever consider new opportunities in the future, please feel free to reach out. Wishing you the best!
 
@@ -892,7 +901,7 @@ ${senderName}`;
   if (persona === 'founder') {
     return `Hi ${firstName},
 
-Last follow-up from my side — completely understand if the timing isn't right.
+Last follow-up from my side, completely understand if the timing isn't right.
 
 If you do end up looking for someone on the engineering side in the future, happy to reconnect.
 
@@ -925,12 +934,21 @@ ${senderName}`;
   // Employee
   return `Hi ${firstName},
 
-Last note from my side — completely understand if referrals aren't open right now.
+Last note from my side, completely understand if referrals aren't open right now.
 
 Great connecting with a fellow engineer, and wishing you all the best${compRef}!
 
 Thanks,
 ${senderName}`;
+}
+
+/**
+ * Removes em dashes (—) and en dashes (–) from messages, replacing them with natural punctuation
+ */
+export function removeEmDashes(text: string): string {
+  return text
+    .replace(/\s*—\s*/g, ', ')
+    .replace(/\s*–\s*/g, '-');
 }
 
 // =========================================================================
@@ -995,8 +1013,12 @@ export function generatePersonalizedDM(
   const day5 = buildDay5FollowUp(ctx);
   const day12 = buildDay12FollowUp(ctx);
 
+  const cleanDay0 = removeEmDashes(day0);
+  const cleanDay5 = removeEmDashes(day5);
+  const cleanDay12 = removeEmDashes(day12);
+
   // Validate Day 0 message quality
-  const validation = validateMessageQuality(day0, {
+  const validation = validateMessageQuality(cleanDay0, {
     persona,
     goal,
     touchpoint: 'day0',
@@ -1004,9 +1026,9 @@ export function generatePersonalizedDM(
   });
 
   return {
-    day0,
-    day5,
-    day12,
+    day0: cleanDay0,
+    day5: cleanDay5,
+    day12: cleanDay12,
     persona,
     goal,
     angle,
