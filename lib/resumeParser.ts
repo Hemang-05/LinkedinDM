@@ -6,7 +6,12 @@ export interface ExtractedResumeData {
   phone: string | null;
   targetRole: string | null;
   skills: string[];
+  primarySkills: string[];
   yearsOfExperience: number | null;
+  domain: string | null;
+  background: string | null;
+  bioSummary: string | null;
+  relevantExperience: string | null;
   rawTextPreview: string;
 }
 
@@ -70,32 +75,95 @@ const NON_NAME_WORDS = new Set([
   'activities'
 ]);
 
-// Known tech skills pool for matching
+// Known tech skills pool covering all core software engineering, data, cloud & mobile domains
 const TECH_SKILLS_POOL = [
+  // Web & Frontend
   'React',
   'Next.js',
   'TypeScript',
   'JavaScript',
+  'Vue.js',
+  'Angular',
+  'Svelte',
+  'TailwindCSS',
+  'Redux',
+  'HTML5',
+  'CSS3',
+  // Backend & Languages
+  'Node.js',
+  'Express',
+  'NestJS',
   'Python',
   'FastAPI',
   'Django',
   'Flask',
-  'Node.js',
-  'Express',
-  'PostgreSQL',
-  'MongoDB',
-  'MySQL',
-  'Redis',
-  'Docker',
-  'Kubernetes',
+  'Java',
+  'Spring Boot',
+  'Golang',
+  'Go',
+  'C++',
+  'C#',
+  '.NET',
+  'ASP.NET',
+  'Rust',
+  'PHP',
+  'Laravel',
+  'Ruby on Rails',
+  'Ruby',
+  'Scala',
+  // Mobile
+  'Flutter',
+  'React Native',
+  'Swift',
+  'Kotlin',
+  'iOS',
+  'Android',
+  'SwiftUI',
+  'Jetpack Compose',
+  // Data, AI & ML
+  'SQL',
+  'PyTorch',
+  'TensorFlow',
+  'Scikit-learn',
+  'Pandas',
+  'NumPy',
+  'Spark',
+  'PySpark',
+  'Databricks',
+  'Snowflake',
+  'BigQuery',
+  'LLM',
+  'RAG',
+  'NLP',
+  'LangChain',
+  // Cloud & DevOps
   'AWS',
   'GCP',
   'Azure',
-  'GraphQL',
+  'Docker',
+  'Kubernetes',
+  'Terraform',
+  'CI/CD',
+  'Linux',
+  'Jenkins',
+  'GitHub Actions',
+  // Databases & Messaging
+  'PostgreSQL',
+  'MySQL',
+  'MongoDB',
+  'Redis',
+  'Kafka',
+  'Elasticsearch',
+  'DynamoDB',
+  'Cassandra',
+  'SQLite',
+  // APIs & Architecture
   'REST APIs',
-  'TailwindCSS',
-  'LLM/RAG',
-  'Git'
+  'GraphQL',
+  'gRPC',
+  'Microservices',
+  'System Design',
+  'Distributed Systems'
 ];
 
 /**
@@ -268,52 +336,160 @@ function isValidNameCandidate(line: string): boolean {
 /**
  * Extracts target role / title from resume
  */
-export function extractTargetRole(text: string): string | null {
+export function extractTargetRole(text: string, candidateName?: string | null): string | null {
+  if (!text) return null;
+
+  const lines = text
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  // 1. Check lines immediately following candidate name or in top 8 lines
+  for (let i = 0; i < Math.min(lines.length, 8); i++) {
+    const line = lines[i];
+    if (candidateName && line.toLowerCase().includes(candidateName.toLowerCase())) continue;
+    if (/@|http|\.com|\d{5,}/.test(line)) continue;
+
+    const segments = line.split(/[|•·—,]/);
+    for (const segment of segments) {
+      const seg = segment.trim();
+      if (
+        seg.length >= 4 &&
+        seg.length <= 40 &&
+        /(developer|engineer|architect|scientist|analyst|manager|specialist|designer|programmer|consultant|sdet|administrator|lead)/i.test(seg) &&
+        !/(resume|curriculum|summary|experience|education|project|skill|university|college|contact)/i.test(seg)
+      ) {
+        return toTitleCase(seg);
+      }
+    }
+  }
+
+  // 2. Comprehensive role catalog
   const commonRoles = [
+    'Senior Full Stack Engineer',
     'Full Stack Engineer',
     'Full Stack Developer',
-    'Software Engineer',
     'Senior Software Engineer',
+    'Lead Software Engineer',
+    'Staff Software Engineer',
+    'Principal Software Engineer',
+    'Software Engineer',
+    'Software Development Engineer',
+    'Senior Frontend Engineer',
     'Frontend Engineer',
     'Frontend Developer',
+    'Senior Backend Engineer',
     'Backend Engineer',
     'Backend Developer',
-    'Product Engineer',
-    'Founding Engineer',
-    'AI Engineer',
+    'Java Developer',
+    'Python Developer',
+    'Android Developer',
+    'iOS Developer',
+    'Mobile Engineer',
+    'Flutter Developer',
+    'React Native Developer',
+    'Data Engineer',
+    'Senior Data Engineer',
+    'Data Scientist',
+    'Senior Data Scientist',
     'Machine Learning Engineer',
-    'Software Development Engineer'
+    'AI Engineer',
+    'Data Analyst',
+    'DevOps Engineer',
+    'Cloud Engineer',
+    'Site Reliability Engineer',
+    'Product Manager',
+    'Technical Program Manager',
+    'QA Engineer',
+    'SDET',
+    'Product Designer',
+    'UI/UX Designer',
+    'Founding Engineer',
+    'Product Engineer'
   ];
 
   const lower = text.toLowerCase();
   for (const role of commonRoles) {
-    if (lower.includes(role.toLowerCase())) {
+    const re = new RegExp(`\\b${role.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (re.test(lower)) {
       return role;
     }
   }
-  return null;
+
+  return 'Software Engineer';
 }
 
 /**
- * Extracts skills mentioned in the resume
+ * Extracts skills mentioned in the resume and ranks by frequency
  */
-export function extractSkills(text: string): string[] {
+export function extractSkills(text: string): { all: string[]; primary: string[] } {
   const lower = text.toLowerCase();
-  const matched: string[] = [];
+  const skillCounts: { skill: string; count: number }[] = [];
 
   for (const skill of TECH_SKILLS_POOL) {
-    // Regex word boundary matching
-    const re = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    if (re.test(lower)) {
-      matched.push(skill);
+    const re = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    const matches = lower.match(re);
+    if (matches && matches.length > 0) {
+      skillCounts.push({ skill, count: matches.length });
     }
   }
 
-  return Array.from(new Set(matched));
+  skillCounts.sort((a, b) => b.count - a.count);
+  const all = skillCounts.map(s => s.skill);
+  const primary = all.slice(0, 5);
+
+  return { all, primary };
 }
 
 /**
- * Extracts years of experience from resume
+ * Extracts candidate's primary domain and background from resume text
+ */
+export function extractBackgroundDomain(text: string, role?: string | null, skills?: string[]): string {
+  const lower = text.toLowerCase();
+
+  if (/(\bdeep learning\b|\bnlp\b|\bllm\b|\bmachine learning\b|\btransformers\b|\bpytorch\b|\btensorflow\b)/i.test(lower)) {
+    return 'AI / Machine Learning';
+  }
+  if (/(\bfintech\b|\bfinancial\b|\bpayments?\b|\btrading\b|\bbanking\b)/i.test(lower)) {
+    return 'FinTech & Distributed Systems';
+  }
+  if (/(\bdevops\b|\bkubernetes\b|\bterraform\b|\bsre\b|\bcloud infrastructure\b|\bci\/cd\b)/i.test(lower)) {
+    return 'Cloud Infrastructure & DevOps';
+  }
+  if (/(\bdata engineering\b|\bdata pipelines?\b|\betl\b|\bspark\b|\bsnowflake\b|\bbigquery\b|\bdatabricks\b)/i.test(lower)) {
+    return 'Data Engineering & Analytics';
+  }
+  if (/(\bflutter\b|\breact native\b|\bios\b|\bandroid\b|\bswift\b|\bkotlin\b|\bmobile apps?\b)/i.test(lower)) {
+    return 'Mobile Application Development';
+  }
+  if (/(\be-?commerce\b|\bretail\b|\bmarketplace\b|\bshopify\b)/i.test(lower)) {
+    return 'E-commerce & Consumer Tech';
+  }
+  if (/(\bhealthtech\b|\bhealthcare\b|\bmedical\b|\bhipaa\b)/i.test(lower)) {
+    return 'HealthTech & Medical Software';
+  }
+  if (/(\bstartups?\b|\bearly-?stage\b|\b0 to 1\b|\bfounding\b)/i.test(lower)) {
+    return 'Early-Stage Startups & Product Innovation';
+  }
+  if (/(\bsaas\b|\bb2b\b|\benterprise\b|\bmicroservices\b)/i.test(lower)) {
+    return 'B2B SaaS & Distributed Systems';
+  }
+
+  if (role) {
+    const lowerRole = role.toLowerCase();
+    if (lowerRole.includes('frontend')) return 'Frontend & Web Applications';
+    if (lowerRole.includes('backend')) return 'Backend Architecture & APIs';
+    if (lowerRole.includes('full stack')) return 'Full Stack Product Engineering';
+    if (lowerRole.includes('data')) return 'Data & Analytics Systems';
+    if (lowerRole.includes('mobile')) return 'Mobile Applications';
+    if (lowerRole.includes('cloud') || lowerRole.includes('devops')) return 'Cloud Infrastructure';
+  }
+
+  return 'Software Engineering & Production Systems';
+}
+
+/**
+ * Extracts years of experience from resume text
  */
 export function extractExperienceYears(text: string): number | null {
   const match = text.match(/(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+experience/i);
@@ -323,6 +499,23 @@ export function extractExperienceYears(text: string): number | null {
       return yrs;
     }
   }
+
+  // Check date ranges like 2020 - 2024 or 2019 - Present
+  const dateRanges = text.match(/\b(201\d|202\d)\s*[-–—to]+\s*(present|current|202\d)\b/gi);
+  if (dateRanges && dateRanges.length > 0) {
+    const currentYear = new Date().getFullYear();
+    let earliest = currentYear;
+    for (const range of dateRanges) {
+      const startMatch = range.match(/\b(201\d|202\d)\b/);
+      if (startMatch) {
+        const start = parseInt(startMatch[1], 10);
+        if (start < earliest) earliest = start;
+      }
+    }
+    const diff = currentYear - earliest;
+    if (diff > 0 && diff <= 25) return diff;
+  }
+
   return null;
 }
 
@@ -335,9 +528,15 @@ export async function parseResumeBuffer(
 ): Promise<ExtractedResumeData> {
   const text = await extractTextFromBuffer(buffer, filename);
   const name = extractCandidateName(text);
-  const targetRole = extractTargetRole(text);
-  const skills = extractSkills(text);
-  const yearsOfExperience = extractExperienceYears(text);
+  const targetRole = extractTargetRole(text, name);
+  const { all: skills, primary: primarySkills } = extractSkills(text);
+  const yearsOfExperience = extractExperienceYears(text) || 3;
+  const domain = extractBackgroundDomain(text, targetRole, skills);
+
+  const topSkillsText = primarySkills.length > 0 ? primarySkills.slice(0, 4).join(', ') : 'modern tech stacks';
+  const bioSummary = `${targetRole || 'Software Engineer'} with ${yearsOfExperience}+ years of experience in ${domain}, specializing in ${topSkillsText}.`;
+  const relevantExperience = `Building and shipping production systems, end-to-end feature delivery, and scalable architecture with ${topSkillsText}.`;
+  const background = domain;
 
   // Email and phone
   const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
@@ -349,7 +548,12 @@ export async function parseResumeBuffer(
     phone: phoneMatch ? phoneMatch[0] : null,
     targetRole,
     skills,
+    primarySkills,
     yearsOfExperience,
+    domain,
+    background,
+    bioSummary,
+    relevantExperience,
     rawTextPreview: text.slice(0, 300).trim()
   };
 }

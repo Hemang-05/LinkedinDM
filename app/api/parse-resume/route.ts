@@ -22,7 +22,12 @@ export async function POST(request: Request) {
       name: parsed.name,
       targetRole: parsed.targetRole,
       skills: parsed.skills,
+      primarySkills: parsed.primarySkills,
       yearsOfExperience: parsed.yearsOfExperience,
+      domain: parsed.domain,
+      background: parsed.background,
+      bioSummary: parsed.bioSummary,
+      relevantExperience: parsed.relevantExperience,
       email: parsed.email,
       phone: parsed.phone,
       preview: parsed.rawTextPreview

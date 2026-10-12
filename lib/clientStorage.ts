@@ -91,12 +91,31 @@ export function getClientProfile(): UserProfile {
     const parsed = JSON.parse(data);
     if (!parsed || typeof parsed !== 'object') return DEFAULT_PROFILE;
 
+    const hasCustomProfile = Boolean(parsed.name && parsed.name !== DEFAULT_PROFILE.name);
+    const skills = (Array.isArray(parsed.skills) && parsed.skills.length > 0)
+      ? parsed.skills
+      : DEFAULT_PROFILE.skills;
+
+    const primarySkills = (Array.isArray(parsed.primarySkills) && parsed.primarySkills.length > 0)
+      ? parsed.primarySkills
+      : (Array.isArray(parsed.skills) && parsed.skills.length > 0)
+      ? parsed.skills.slice(0, 5)
+      : DEFAULT_PROFILE.primarySkills;
+
     const name = (!parsed.name || parsed.name === 'Your Name') ? DEFAULT_PROFILE.name : parsed.name;
+    const targetRole = parsed.targetRole || parsed.title || DEFAULT_PROFILE.targetRole || 'Full Stack Engineer';
+
     return {
       ...DEFAULT_PROFILE,
       ...parsed,
       name,
-      targetRole: parsed.targetRole || DEFAULT_PROFILE.targetRole || 'Full Stack Engineer'
+      targetRole,
+      title: parsed.title || targetRole,
+      skills,
+      primarySkills,
+      background: parsed.background || (hasCustomProfile ? 'Software Engineering & Production Systems' : DEFAULT_PROFILE.background),
+      bioSummary: parsed.bioSummary || DEFAULT_PROFILE.bioSummary,
+      relevantExperience: parsed.relevantExperience || DEFAULT_PROFILE.relevantExperience
     };
   } catch (err) {
     return DEFAULT_PROFILE;

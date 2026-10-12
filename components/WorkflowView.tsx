@@ -55,7 +55,9 @@ export function WorkflowView({
   });
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeParsed, setResumeParsed] = useState(false);
-  const [resumeSkillsCount, setResumeSkillsCount] = useState<number>(0);
+  const [detectedSkills, setDetectedSkills] = useState<string[]>([]);
+  const [detectedDomain, setDetectedDomain] = useState<string>('');
+  const [detectedExp, setDetectedExp] = useState<number | null>(null);
   
   // CSV upload state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -133,24 +135,27 @@ export function WorkflowView({
           setResumeParsed(true);
           const currentProf = getClientProfile();
 
-          if (data.name) {
-            setCandidateName(data.name);
-          }
-          if (data.skills?.length) {
-            setResumeSkillsCount(data.skills.length);
-          }
-          if (data.targetRole && !isCustomTargetRole) {
-            setTargetRole(data.targetRole);
-          }
+          if (data.name) setCandidateName(data.name);
+          if (data.skills?.length) setDetectedSkills(data.skills);
+          if (data.domain || data.background) setDetectedDomain(data.domain || data.background);
+          if (data.yearsOfExperience) setDetectedExp(data.yearsOfExperience);
+          if (data.targetRole && !isCustomTargetRole) setTargetRole(data.targetRole);
 
-          // Persist the extracted candidate profile so DM generator signs with their name
-          saveClientProfile({
+          // Persist the full extracted candidate profile so DM generator tailors to their exact background
+          const updatedProf = {
             ...currentProf,
             name: data.name || candidateName || currentProf.name,
+            title: data.targetRole || currentProf.title || 'Software Engineer',
             targetRole: data.targetRole || currentProf.targetRole || targetRole,
-            ...(data.skills?.length ? { skills: data.skills } : {}),
-            ...(data.yearsOfExperience ? { yearsOfExperience: data.yearsOfExperience } : {})
-          });
+            targetRoles: [data.targetRole || currentProf.targetRole || targetRole],
+            skills: data.skills && data.skills.length > 0 ? data.skills : currentProf.skills,
+            primarySkills: data.primarySkills && data.primarySkills.length > 0 ? data.primarySkills : (data.skills?.slice(0, 5) || currentProf.skills),
+            yearsOfExperience: data.yearsOfExperience ?? currentProf.yearsOfExperience ?? 3,
+            background: data.background || data.domain || currentProf.background,
+            bioSummary: data.bioSummary || currentProf.bioSummary,
+            relevantExperience: data.relevantExperience || currentProf.relevantExperience
+          };
+          saveClientProfile(updatedProf);
         }
       } catch (err) {
         console.error('Failed to parse resume:', err);
@@ -355,6 +360,37 @@ export function WorkflowView({
                 <p className="text-[11px] text-zinc-500">
                   Outreach messages will sign off as: <strong className="text-zinc-800">Best, {candidateName || 'Your Name'}</strong>
                 </p>
+
+                {resumeParsed && (detectedSkills.length > 0 || detectedDomain) && (
+                  <div className="pt-2 border-t border-[#E0DFDC]/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-[#0A66C2] flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Resume Intelligence Active</span>
+                      </span>
+                      {detectedDomain && (
+                        <span className="text-[10px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-full">
+                          {detectedDomain}
+                        </span>
+                      )}
+                    </div>
+                    {detectedSkills.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {detectedSkills.slice(0, 6).map((sk) => (
+                          <span
+                            key={sk}
+                            className="text-[10px] font-semibold bg-white text-zinc-700 border border-[#E0DFDC] px-2 py-0.5 rounded-md"
+                          >
+                            {sk}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[10px] text-zinc-500">
+                      Outreach messages will be tailored specifically to your {detectedDomain || 'background'} and your {detectedSkills.slice(0, 3).join(', ')} skillset.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
