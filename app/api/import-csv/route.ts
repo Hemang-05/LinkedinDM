@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { classifyProspectTitle, isStudentOrIntern, ClassificationResult } from '@/lib/classifier';
 import { calculateScoreAndMatching } from '@/lib/scoring';
+import { parseResumeBuffer } from '@/lib/resumeParser';
 import { Prospect, ScoreExplanation } from '@/types';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     const parsedReq = await readCsvFromRequest(request);
     if (parsedReq instanceof NextResponse) return parsedReq;
 
-    const { csvContent, targetRole = 'Full Stack Engineer' } = parsedReq;
+    const { csvContent, targetRole = 'Full Stack Engineer', senderName, extractedCandidate } = parsedReq;
 
     // ---- 1. Parse (single pass) ----
     const rows = parseCSV(csvContent);
@@ -189,6 +190,8 @@ export async function POST(request: Request) {
       skippedStudents,
       skippedDuplicates,
       prospects,
+      senderName,
+      extractedCandidate,
       timingsMs
     });
   } catch (error) {
@@ -202,6 +205,12 @@ async function readCsvFromRequest(request: Request): Promise<{
   csvContent: string;
   targetRole?: string;
   workflow?: string;
+  senderName?: string;
+  extractedCandidate?: {
+    name: string | null;
+    targetRole: string | null;
+    skills: string[];
+  };
 } | NextResponse> {
   const tooLarge = () =>
     NextResponse.json({ success: false, error: 'CSV file is too large (max 10 MB)' }, { status: 413 });
@@ -212,22 +221,43 @@ async function readCsvFromRequest(request: Request): Promise<{
     const file = form.get('file');
     const targetRole = (form.get('targetRole') as string) || undefined;
     const workflow = (form.get('workflow') as string) || undefined;
+    let senderName = (form.get('senderName') as string) || undefined;
+    const resumeFile = form.get('resumeFile') as File | null;
+    let extractedCandidate: { name: string | null; targetRole: string | null; skills: string[] } | undefined;
 
     if (!file || typeof file === 'string') {
       return NextResponse.json({ success: false, error: 'A CSV file is required' }, { status: 400 });
     }
     if (file.size > MAX_FILE_BYTES) return tooLarge();
     const csvContent = await file.text();
-    return { csvContent, targetRole, workflow };
+
+    if (resumeFile && typeof resumeFile !== 'string') {
+      try {
+        const arr = await resumeFile.arrayBuffer();
+        const parsed = await parseResumeBuffer(Buffer.from(arr), resumeFile.name);
+        extractedCandidate = {
+          name: parsed.name,
+          targetRole: parsed.targetRole,
+          skills: parsed.skills
+        };
+        if (!senderName && parsed.name) {
+          senderName = parsed.name;
+        }
+      } catch (err) {
+        console.error('Failed to parse resumeFile in import-csv:', err);
+      }
+    }
+
+    return { csvContent, targetRole, workflow, senderName, extractedCandidate };
   }
 
   const json = await request.json();
-  const { csvContent, targetRole, workflow } = json || {};
+  const { csvContent, targetRole, workflow, senderName } = json || {};
   if (!csvContent || typeof csvContent !== 'string') {
     return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
   }
   if (csvContent.length > MAX_FILE_BYTES) return tooLarge();
-  return { csvContent, targetRole, workflow };
+  return { csvContent, targetRole, workflow, senderName };
 }
 
 function buildColumnMap(headers: string[]): Record<string, number> {

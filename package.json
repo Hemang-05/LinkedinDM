@@ -10,9 +10,12 @@
     "test": "tsc -p tsconfig.test.json && node scratch_test/scripts/run-tests.js"
   },
   "dependencies": {
+    "@types/pdf-parse": "^1.1.5",
     "clsx": "^2.1.1",
     "lucide-react": "^0.447.0",
+    "mammoth": "^1.13.0",
     "next": "^14.2.15",
+    "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.2"

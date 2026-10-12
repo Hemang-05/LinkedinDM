@@ -81,11 +81,16 @@ export function DMReviewModal({
   const [isLogging, setIsLogging] = useState(false);
   const [logSuccess, setLogSuccess] = useState(false);
 
+  // Sender name signature state
+  const [isEditingSenderName, setIsEditingSenderName] = useState(false);
+  const [senderNameInput, setSenderNameInput] = useState(userProfile.name || '');
+
   // Initialize persona and message on mount or prospect change
   useEffect(() => {
     if (!prospect) return;
     const prof = getClientProfile();
     setUserProfile(prof);
+    setSenderNameInput(prof.name || '');
 
     const initialGoal: OutreachGoal = (workflow as OutreachGoal) || prospect.outreachGoal || 'job-hunt';
     setSelectedGoal(initialGoal);
@@ -109,7 +114,13 @@ export function DMReviewModal({
         ? prospect.followUpDay5Message
         : prospect.followUpDay12Message;
 
-    setMessage(stored || generated[activeTab]);
+    let initialMsg = stored || generated[activeTab];
+    // If a previously stored message had a different sender name, update the sign-off with current profile name
+    if (stored && prof.name && !stored.includes(prof.name)) {
+      initialMsg = stored.replace(/Best,\n[^\n]+/g, `Best,\n${prof.name}`);
+    }
+
+    setMessage(initialMsg);
     setCopied(false);
     setDuplicateWarning(null);
     setLogSuccess(prospect.status === 'Contacted');
@@ -268,6 +279,27 @@ export function DMReviewModal({
 
   const handleResetToDefaultTemplate = () => {
     regenerateMessage(selectedGoal, selectedPersona, selectedAngle, targetRole, activeTab);
+  };
+
+  const handleSaveSenderName = (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const updated = { ...userProfile, name: trimmed };
+    setUserProfile(updated);
+    saveClientProfile(updated);
+    setIsEditingSenderName(false);
+    if (!prospect) return;
+    const generated = generatePersonalizedDM(
+      prospect,
+      targetRole,
+      selectedAngle,
+      updated,
+      selectedGoal,
+      selectedPersona
+    );
+    const newMsg = generated[activeTab];
+    setMessage(newMsg);
+    updateClientProspect(prospect.id, prospect.status, newMsg);
   };
 
   // 1-Click Action: Copies DM to clipboard and immediately opens LinkedIn Profile in new tab
@@ -695,6 +727,57 @@ export function DMReviewModal({
                 ))}
               </div>
             )}
+
+            {/* Sender Signature Bar */}
+            <div className="pt-1 px-1">
+              {isEditingSenderName ? (
+                <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center gap-2">
+                  <span className="shrink-0 text-[11px] font-semibold text-zinc-700">Signature:</span>
+                  <input
+                    type="text"
+                    value={senderNameInput}
+                    onChange={(e) => setSenderNameInput(e.target.value)}
+                    placeholder="Your Full Name"
+                    className="bg-white border border-[#0A66C2] rounded-lg px-2.5 py-1 text-xs font-semibold text-zinc-900 focus:outline-none flex-1 shadow-2xs"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveSenderName(senderNameInput)}
+                    className="px-3 py-1 bg-[#0A66C2] text-white rounded-lg text-xs font-semibold hover:bg-[#004182] transition-colors cursor-pointer"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSenderNameInput(userProfile.name);
+                      setIsEditingSenderName(false);
+                    }}
+                    className="px-2.5 py-1 text-zinc-500 hover:text-zinc-700 text-xs font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs text-zinc-500">
+                  <span className="text-[11px] flex items-center gap-1.5">
+                    <span>Signed as:</span>
+                    <strong className="text-zinc-800 font-semibold">{userProfile.name || 'Your Name'}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSenderNameInput(userProfile.name);
+                      setIsEditingSenderName(true);
+                    }}
+                    className="text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer"
+                  >
+                    Change sender signature
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Action Buttons Section */}
