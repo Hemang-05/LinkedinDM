@@ -373,6 +373,7 @@ export function DMReviewModal({
     };
     onProspectUpdated(updated);
     setIsLogging(false);
+    onClose();
   };
 
   const availableRoles = [

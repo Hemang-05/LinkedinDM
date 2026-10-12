@@ -123,7 +123,13 @@ export default function Home() {
     const updatedList = prospects.map((p) => (p.id === updated.id ? updated : p));
     setProspects(updatedList);
     saveClientProspects(updatedList);
-    setSelectedProspect(updated);
+    
+    // If marked contacted, ensure DM review modal is closed / not opened
+    if (updated.status === 'Contacted') {
+      setSelectedProspect(null);
+    } else if (selectedProspect && selectedProspect.id === updated.id) {
+      setSelectedProspect(updated);
+    }
 
     const updatedLogs = getClientOutreachLogs();
     setOutreachLogs(updatedLogs);
