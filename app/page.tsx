@@ -13,6 +13,7 @@ import {
   getClientProfile,
   saveClientProfile
 } from '@/lib/clientStorage';
+import { EMPTY_PROFILE } from '@/lib/profile';
 import { Header } from '@/components/Header';
 import { BottomNav, NavTab } from '@/components/BottomNav';
 import { HighPriorityCard } from '@/components/HighPriorityCard';
@@ -51,12 +52,12 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
   // User profile state (editable per user)
-  const [userProfile, setUserProfile] = useState<UserProfile>(getClientProfile());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editName, setEditName] = useState(userProfile.name);
-  const [editTitle, setEditTitle] = useState(userProfile.title);
-  const [editTargetRole, setEditTargetRole] = useState(userProfile.targetRole || userProfile.targetRoles?.[0] || 'Full Stack Engineer');
-  const [editSkills, setEditSkills] = useState(userProfile.skills.join(', '));
+  const [editName, setEditName] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editTargetRole, setEditTargetRole] = useState('');
+  const [editSkills, setEditSkills] = useState('');
 
   // Modals
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
@@ -99,20 +100,23 @@ export default function Home() {
 
     const localProf = getClientProfile();
     setUserProfile(localProf);
-    setEditName(localProf.name);
-    setEditTitle(localProf.title);
-    setEditTargetRole(localProf.targetRole || localProf.targetRoles?.[0] || 'Full Stack Engineer');
-    setEditSkills(localProf.skills.join(', '));
+    if (localProf) {
+      setEditName(localProf.name || '');
+      setEditTitle(localProf.title || '');
+      setEditTargetRole(localProf.targetRole || localProf.targetRoles?.[0] || '');
+      setEditSkills(localProf.skills?.join(', ') || '');
+    }
   }, []);
 
   const handleSaveProfile = () => {
     const updatedSkills = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
     const updated: UserProfile = {
-      ...userProfile,
-      name: editName || 'Hemang Mehta',
-      title: editTitle || 'Full Stack / AI Engineer',
-      targetRole: editTargetRole || userProfile.targetRole || 'Full Stack Engineer',
-      skills: updatedSkills.length > 0 ? updatedSkills : userProfile.skills
+      ...(userProfile || EMPTY_PROFILE),
+      name: editName.trim(),
+      title: editTitle.trim(),
+      targetRole: editTargetRole.trim(),
+      targetRoles: editTargetRole.trim() ? [editTargetRole.trim()] : (userProfile?.targetRoles || []),
+      skills: updatedSkills
     };
     setUserProfile(updated);
     saveClientProfile(updated);
@@ -700,18 +704,23 @@ export default function Home() {
                         />
                       </div>
                     </div>
+                  ) : !userProfile || !userProfile.name ? (
+                    <div className="text-xs sm:text-sm space-y-2 text-zinc-500 py-4 text-center">
+                      <p className="font-semibold text-zinc-700">No profile confirmed yet.</p>
+                      <p className="text-xs">Upload your resume on the Home tab to automatically detect and confirm your background.</p>
+                    </div>
                   ) : (
                     <div className="text-xs sm:text-sm space-y-2 text-zinc-700">
                       <p><span className="text-zinc-400 font-medium">Name: </span><strong className="text-zinc-900">{userProfile.name}</strong></p>
-                      <p><span className="text-zinc-400 font-medium">Title: </span>{userProfile.title}</p>
-                      <p><span className="text-zinc-400 font-medium">Target Role Seeking: </span><span className="font-semibold text-[#0A66C2] bg-[#EBF3FB] px-2 py-0.5 rounded-full border border-[#0A66C2]/20">{userProfile.targetRole || 'Full Stack Engineer'}</span></p>
-                      <p><span className="text-zinc-400 font-medium">Target Roles Pool: </span>{userProfile.targetRoles.join(', ')}</p>
+                      <p><span className="text-zinc-400 font-medium">Title: </span>{userProfile.title || 'Not specified'}</p>
+                      <p><span className="text-zinc-400 font-medium">Target Role Seeking: </span><span className="font-semibold text-[#0A66C2] bg-[#EBF3FB] px-2 py-0.5 rounded-full border border-[#0A66C2]/20">{userProfile.targetRole || userProfile.title || 'Not specified'}</span></p>
+                      <p><span className="text-zinc-400 font-medium">Target Roles Pool: </span>{userProfile.targetRoles?.length ? userProfile.targetRoles.join(', ') : 'None'}</p>
                       <div className="pt-2 border-t border-[#E0DFDC]">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
                           Your Technical Skills
                         </span>
                         <div className="flex flex-wrap gap-1.5">
-                          {userProfile.skills.map((s, idx) => (
+                          {userProfile.skills?.map((s, idx) => (
                             <span key={idx} className="text-xs bg-[#F4F2EE] text-zinc-700 px-2.5 py-1 rounded-full border border-[#E0DFDC]">
                               {s}
                             </span>

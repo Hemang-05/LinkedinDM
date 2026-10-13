@@ -1,10 +1,10 @@
-import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile } from '@/types';
+import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile, OutreachGoal } from '@/types';
 import { INITIAL_PROSPECTS } from './sampleData';
-import { DEFAULT_PROFILE } from './profile';
+import { EMPTY_PROFILE } from './profile';
 
 const PROSPECTS_STORAGE_KEY = 'directmessage_prospects_v2';
 const OUTREACH_STORAGE_KEY = 'directmessage_outreach_v2';
-const PROFILE_STORAGE_KEY = 'directmessage_user_profile_v2';
+const PROFILE_STORAGE_KEY = 'directmessage_user_profile_v3';
 
 export function getClientProspects(): Prospect[] {
   if (typeof window === 'undefined') return [];
@@ -82,43 +82,37 @@ export function saveClientOutreachLogs(logs: OutreachLogEntry[]): void {
   }
 }
 
-export function getClientProfile(): UserProfile {
-  if (typeof window === 'undefined') return DEFAULT_PROFILE;
+export function isProfileComplete(profile: UserProfile | null | undefined, goal: OutreachGoal = 'job-hunt'): boolean {
+  if (!profile) return false;
+  const hasName = Boolean(profile.name && profile.name.trim().length > 0 && profile.name.trim() !== 'Your Name');
+  const hasRole = Boolean((profile.targetRole && profile.targetRole.trim()) || (profile.title && profile.title.trim()));
+  const hasSkills = Array.isArray(profile.skills) && profile.skills.length > 0;
+  const hasExp = typeof profile.yearsOfExperience === 'number' && !isNaN(profile.yearsOfExperience) && profile.yearsOfExperience >= 0;
+  if (!hasName || !hasRole || !hasSkills || !hasExp) return false;
+  if (goal === 'agency-leads') {
+    const hasAgencySummary = Boolean(profile.agencyServiceSummary && profile.agencyServiceSummary.trim());
+    const hasAgencyOffering = Boolean(profile.agencyOffering && profile.agencyOffering.trim());
+    if (!hasAgencySummary || !hasAgencyOffering) return false;
+  }
+  return true;
+}
+
+export function getClientProfile(): UserProfile | null {
+  if (typeof window === 'undefined') return null;
 
   try {
     const data = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!data) return DEFAULT_PROFILE;
+    if (!data) return null;
     const parsed = JSON.parse(data);
-    if (!parsed || typeof parsed !== 'object') return DEFAULT_PROFILE;
-
-    const hasCustomProfile = Boolean(parsed.name && parsed.name !== DEFAULT_PROFILE.name);
-    const skills = (Array.isArray(parsed.skills) && parsed.skills.length > 0)
-      ? parsed.skills
-      : DEFAULT_PROFILE.skills;
-
-    const primarySkills = (Array.isArray(parsed.primarySkills) && parsed.primarySkills.length > 0)
-      ? parsed.primarySkills
-      : (Array.isArray(parsed.skills) && parsed.skills.length > 0)
-      ? parsed.skills.slice(0, 5)
-      : DEFAULT_PROFILE.primarySkills;
-
-    const name = (!parsed.name || parsed.name === 'Your Name') ? DEFAULT_PROFILE.name : parsed.name;
-    const targetRole = parsed.targetRole || parsed.title || DEFAULT_PROFILE.targetRole || 'Full Stack Engineer';
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!parsed.name || typeof parsed.name !== 'string' || !parsed.name.trim()) return null;
 
     return {
-      ...DEFAULT_PROFILE,
-      ...parsed,
-      name,
-      targetRole,
-      title: parsed.title || targetRole,
-      skills,
-      primarySkills,
-      background: parsed.background || (hasCustomProfile ? 'Software Engineering & Production Systems' : DEFAULT_PROFILE.background),
-      bioSummary: parsed.bioSummary || DEFAULT_PROFILE.bioSummary,
-      relevantExperience: parsed.relevantExperience || DEFAULT_PROFILE.relevantExperience
+      ...EMPTY_PROFILE,
+      ...parsed
     };
   } catch (err) {
-    return DEFAULT_PROFILE;
+    return null;
   }
 }
 

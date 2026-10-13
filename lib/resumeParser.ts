@@ -444,7 +444,7 @@ export function extractSkills(text: string): { all: string[]; primary: string[] 
 /**
  * Extracts candidate's primary domain and background from resume text
  */
-export function extractBackgroundDomain(text: string, role?: string | null, skills?: string[]): string {
+export function extractBackgroundDomain(text: string, role?: string | null, skills?: string[]): string | null {
   const lower = text.toLowerCase();
 
   if (/(\bdeep learning\b|\bnlp\b|\bllm\b|\bmachine learning\b|\btransformers\b|\bpytorch\b|\btensorflow\b)/i.test(lower)) {
@@ -485,7 +485,7 @@ export function extractBackgroundDomain(text: string, role?: string | null, skil
     if (lowerRole.includes('cloud') || lowerRole.includes('devops')) return 'Cloud Infrastructure';
   }
 
-  return 'Software Engineering & Production Systems';
+  return null;
 }
 
 /**
@@ -495,7 +495,7 @@ export function extractExperienceYears(text: string): number | null {
   const match = text.match(/(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+experience/i);
   if (match && match[1]) {
     const yrs = parseInt(match[1], 10);
-    if (!isNaN(yrs) && yrs > 0 && yrs <= 30) {
+    if (!isNaN(yrs) && yrs >= 0 && yrs <= 30) {
       return yrs;
     }
   }
@@ -513,7 +513,7 @@ export function extractExperienceYears(text: string): number | null {
       }
     }
     const diff = currentYear - earliest;
-    if (diff > 0 && diff <= 25) return diff;
+    if (diff >= 0 && diff <= 25) return diff;
   }
 
   return null;
@@ -530,12 +530,19 @@ export async function parseResumeBuffer(
   const name = extractCandidateName(text);
   const targetRole = extractTargetRole(text, name);
   const { all: skills, primary: primarySkills } = extractSkills(text);
-  const yearsOfExperience = extractExperienceYears(text) || 3;
+  const yearsOfExperience = extractExperienceYears(text);
   const domain = extractBackgroundDomain(text, targetRole, skills);
 
-  const topSkillsText = primarySkills.length > 0 ? primarySkills.slice(0, 4).join(', ') : 'modern tech stacks';
-  const bioSummary = `${targetRole || 'Software Engineer'} with ${yearsOfExperience}+ years of experience in ${domain}, specializing in ${topSkillsText}.`;
-  const relevantExperience = `Building and shipping production systems, end-to-end feature delivery, and scalable architecture with ${topSkillsText}.`;
+  const topSkillsText = primarySkills.length > 0 ? primarySkills.slice(0, 4).join(', ') : '';
+  const expPhrase = yearsOfExperience !== null && yearsOfExperience !== undefined
+    ? `${yearsOfExperience}+ years of experience`
+    : 'experience';
+  const domainPhrase = domain ? ` in ${domain}` : '';
+  const skillsPhrase = topSkillsText ? `, specializing in ${topSkillsText}` : '';
+  const bioSummary = `${targetRole || 'Professional'} with ${expPhrase}${domainPhrase}${skillsPhrase}.`;
+  const relevantExperience = topSkillsText
+    ? `Building and shipping production systems, end-to-end feature delivery, and scalable architecture with ${topSkillsText}.`
+    : '';
   const background = domain;
 
   // Email and phone

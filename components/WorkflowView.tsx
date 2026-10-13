@@ -15,10 +15,13 @@ import {
   Check,
   Sparkles,
   Loader2,
-  User
+  User,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
-import { Prospect } from '@/types';
-import { getClientProfile, saveClientProfile } from '@/lib/clientStorage';
+import { Prospect, UserProfile } from '@/types';
+import { getClientProfile, saveClientProfile, isProfileComplete } from '@/lib/clientStorage';
+import { EMPTY_PROFILE } from '@/lib/profile';
 
 export type WorkflowType = 'job-hunt' | 'agency-leads' | 'hire' | 'freelancers';
 
@@ -35,30 +38,30 @@ export function WorkflowView({
   onImportComplete,
   onOpenGuideModal
 }: WorkflowViewProps) {
-  // State for secondary files (Resume / JD / Project brief)
+  const existingProf = typeof window !== 'undefined' ? getClientProfile() : null;
+
+  // Secondary file (Resume / JD / Project brief)
   const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
   const [targetSector, setTargetSector] = useState('');
-  const [targetRole, setTargetRole] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return getClientProfile().targetRole || 'Full Stack Engineer';
-    }
-    return 'Full Stack Engineer';
-  });
-  const [isCustomTargetRole, setIsCustomTargetRole] = useState(false);
 
-  // Candidate name state (extracted from resume or custom)
-  const [candidateName, setCandidateName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return getClientProfile().name || '';
-    }
-    return '';
-  });
+  // Editable Profile Form Fields
+  const [candidateName, setCandidateName] = useState(existingProf?.name || '');
+  const [targetRole, setTargetRole] = useState(existingProf?.targetRole || existingProf?.title || '');
+  const [isCustomTargetRole, setIsCustomTargetRole] = useState(false);
+  const [expYearsInput, setExpYearsInput] = useState(
+    existingProf?.yearsOfExperience !== undefined ? String(existingProf.yearsOfExperience) : ''
+  );
+  const [skillsInput, setSkillsInput] = useState(existingProf?.skills?.join(', ') || '');
+  const [domainInput, setDomainInput] = useState(existingProf?.background || '');
+  const [agencySummaryInput, setAgencySummaryInput] = useState(existingProf?.agencyServiceSummary || '');
+  const [agencyOfferingInput, setAgencyOfferingInput] = useState(existingProf?.agencyOffering || '');
+
+  // Status flags
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeParsed, setResumeParsed] = useState(false);
-  const [detectedSkills, setDetectedSkills] = useState<string[]>([]);
-  const [detectedDomain, setDetectedDomain] = useState<string>('');
-  const [detectedExp, setDetectedExp] = useState<number | null>(null);
-  
+  const [isProfileConfirmed, setIsProfileConfirmed] = useState(() => isProfileComplete(existingProf, workflow));
+  const [confirmErrorMsg, setConfirmErrorMsg] = useState('');
+
   // CSV upload state
   const [isProcessing, setIsProcessing] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -115,8 +118,9 @@ export function WorkflowView({
     if (!file) return;
 
     setSecondaryFile(file);
+    setIsProfileConfirmed(false);
+    setConfirmErrorMsg('');
 
-    // If job-hunt workflow (or any resume upload), immediately parse file to extract candidate name & role
     if (workflow === 'job-hunt') {
       setIsParsingResume(true);
       setErrorMsg('');
@@ -133,36 +137,87 @@ export function WorkflowView({
         const data = await res.json();
         if (data.success) {
           setResumeParsed(true);
-          const currentProf = getClientProfile();
 
           if (data.name) setCandidateName(data.name);
-          if (data.skills?.length) setDetectedSkills(data.skills);
-          if (data.domain || data.background) setDetectedDomain(data.domain || data.background);
-          if (data.yearsOfExperience) setDetectedExp(data.yearsOfExperience);
-          if (data.targetRole && !isCustomTargetRole) setTargetRole(data.targetRole);
-
-          // Persist the full extracted candidate profile so DM generator tailors to their exact background
-          const updatedProf = {
-            ...currentProf,
-            name: data.name || candidateName || currentProf.name,
-            title: data.targetRole || currentProf.title || 'Software Engineer',
-            targetRole: data.targetRole || currentProf.targetRole || targetRole,
-            targetRoles: [data.targetRole || currentProf.targetRole || targetRole],
-            skills: data.skills && data.skills.length > 0 ? data.skills : currentProf.skills,
-            primarySkills: data.primarySkills && data.primarySkills.length > 0 ? data.primarySkills : (data.skills?.slice(0, 5) || currentProf.skills),
-            yearsOfExperience: data.yearsOfExperience ?? currentProf.yearsOfExperience ?? 3,
-            background: data.background || data.domain || currentProf.background,
-            bioSummary: data.bioSummary || currentProf.bioSummary,
-            relevantExperience: data.relevantExperience || currentProf.relevantExperience
-          };
-          saveClientProfile(updatedProf);
+          if (data.targetRole) setTargetRole(data.targetRole);
+          if (data.yearsOfExperience !== null && data.yearsOfExperience !== undefined) {
+            setExpYearsInput(String(data.yearsOfExperience));
+          } else {
+            setExpYearsInput('');
+          }
+          if (data.skills?.length) {
+            setSkillsInput(data.skills.join(', '));
+          }
+          if (data.domain || data.background) {
+            setDomainInput(data.domain || data.background);
+          }
         }
       } catch (err) {
         console.error('Failed to parse resume:', err);
+        setErrorMsg('Failed to parse resume. Please enter your details below.');
       } finally {
         setIsParsingResume(false);
       }
     }
+  };
+
+  const handleConfirmProfile = () => {
+    const trimmedName = candidateName.trim();
+    const trimmedRole = targetRole.trim();
+    const parsedExp = parseInt(expYearsInput, 10);
+    const parsedSkills = skillsInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const trimmedDomain = domainInput.trim();
+
+    if (!trimmedName || trimmedName === 'Your Name') {
+      setConfirmErrorMsg('Your name is required.');
+      return;
+    }
+    if (!trimmedRole) {
+      setConfirmErrorMsg('Target role is required.');
+      return;
+    }
+    if (isNaN(parsedExp) || parsedExp < 0) {
+      setConfirmErrorMsg('Years of experience must be a valid number (0 or higher).');
+      return;
+    }
+    if (parsedSkills.length === 0) {
+      setConfirmErrorMsg('At least one technical skill is required.');
+      return;
+    }
+    if (!trimmedDomain) {
+      setConfirmErrorMsg('Background or domain is required.');
+      return;
+    }
+    if (workflow === 'agency-leads') {
+      if (!agencySummaryInput.trim() || !agencyOfferingInput.trim()) {
+        setConfirmErrorMsg('Agency service summary and offering are required for agency leads.');
+        return;
+      }
+    }
+
+    const confirmed: UserProfile = {
+      ...EMPTY_PROFILE,
+      name: trimmedName,
+      title: trimmedRole,
+      targetRole: trimmedRole,
+      targetRoles: [trimmedRole],
+      targetLocations: ['Remote'],
+      skills: parsedSkills,
+      primarySkills: parsedSkills.slice(0, 5),
+      yearsOfExperience: parsedExp,
+      background: trimmedDomain,
+      bioSummary: `${trimmedRole} with ${parsedExp}+ years of experience in ${trimmedDomain}.`,
+      relevantExperience: `Building and shipping production systems with ${parsedSkills.slice(0, 3).join(', ')}.`,
+      agencyServiceSummary: agencySummaryInput.trim(),
+      agencyOffering: agencyOfferingInput.trim()
+    };
+
+    saveClientProfile(confirmed);
+    setIsProfileConfirmed(true);
+    setConfirmErrorMsg('');
   };
 
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +234,12 @@ export function WorkflowView({
       return;
     }
 
+    const currentProf = getClientProfile();
+    if (!currentProf || !isProfileComplete(currentProf, workflow)) {
+      setErrorMsg('Please confirm and save your profile details before continuing.');
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMsg('');
     setSuccessCount(null);
@@ -189,19 +250,8 @@ export function WorkflowView({
       form.append('workflow', workflow);
       if (targetSector) form.append('targetSector', targetSector);
 
-      // Persist and send candidate name & target role
-      const prof = getClientProfile();
-      const effectiveName = candidateName?.trim() || prof.name;
-      const effectiveRole = targetRole || prof.targetRole;
-
-      saveClientProfile({
-        ...prof,
-        name: effectiveName,
-        targetRole: effectiveRole
-      });
-
-      if (effectiveRole) form.append('targetRole', effectiveRole);
-      if (effectiveName) form.append('senderName', effectiveName);
+      if (currentProf.targetRole) form.append('targetRole', currentProf.targetRole);
+      if (currentProf.name) form.append('senderName', currentProf.name);
       if (secondaryFile) form.append('resumeFile', secondaryFile);
 
       const res = await fetch('/api/import-csv', { method: 'POST', body: form });
@@ -224,7 +274,8 @@ export function WorkflowView({
     }
   };
 
-  const canContinue = Boolean(csvFile);
+  const currentProf = typeof window !== 'undefined' ? getClientProfile() : null;
+  const isReadyToProceed = Boolean(csvFile && isProfileComplete(currentProf, workflow));
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-200">
@@ -322,136 +373,174 @@ export function WorkflowView({
             {isParsingResume && (
               <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center gap-2.5 text-xs text-[#0A66C2] animate-pulse">
                 <Loader2 className="w-4 h-4 animate-spin text-[#0A66C2]" />
-                <span className="font-semibold">Reading resume & detecting candidate name...</span>
-              </div>
-            )}
-
-            {/* Candidate Name Card for DM Sign-off */}
-            {workflow === 'job-hunt' && (
-              <div className="p-3.5 bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-[#0A66C2]" />
-                    <span className="text-xs font-bold text-zinc-900">
-                      Candidate Name (Used in DM Signature)
-                    </span>
-                  </div>
-                  {resumeParsed && candidateName ? (
-                    <span className="text-[11px] font-semibold text-[#057642] bg-[#057642]/10 border border-[#057642]/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Check className="w-3 h-3" />
-                      <span>Extracted from Resume</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-zinc-400">Signs custom DMs</span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={candidateName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCandidateName(val);
-                    const currentProf = getClientProfile();
-                    saveClientProfile({ ...currentProf, name: val });
-                  }}
-                  placeholder="Your Full Name (e.g. Alex Johnson)"
-                  className="w-full bg-white border border-[#E0DFDC] rounded-xl px-3 py-2 text-xs font-semibold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] transition-colors"
-                />
-                <p className="text-[11px] text-zinc-500">
-                  Outreach messages will sign off as: <strong className="text-zinc-800">Best, {candidateName || 'Your Name'}</strong>
-                </p>
-
-                {resumeParsed && (detectedSkills.length > 0 || detectedDomain) && (
-                  <div className="pt-2 border-t border-[#E0DFDC]/80 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-[#0A66C2] flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        <span>Resume Intelligence Active</span>
-                      </span>
-                      {detectedDomain && (
-                        <span className="text-[10px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-full">
-                          {detectedDomain}
-                        </span>
-                      )}
-                    </div>
-                    {detectedSkills.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        {detectedSkills.slice(0, 6).map((sk) => (
-                          <span
-                            key={sk}
-                            className="text-[10px] font-semibold bg-white text-zinc-700 border border-[#E0DFDC] px-2 py-0.5 rounded-md"
-                          >
-                            {sk}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-[10px] text-zinc-500">
-                      Outreach messages will be tailored specifically to your {detectedDomain || 'background'} and your {detectedSkills.slice(0, 3).join(', ')} skillset.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {workflow === 'job-hunt' && (
-              <div className="pt-3 border-t border-[#E0DFDC] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5 text-[#0A66C2]" />
-                    <span className="text-xs font-bold text-zinc-900">
-                      Target Role / Opportunity You Are Seeking
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomTargetRole(!isCustomTargetRole)}
-                    className="text-[11px] font-semibold text-[#0A66C2] hover:underline"
-                  >
-                    {isCustomTargetRole ? 'Choose preset' : 'Type custom'}
-                  </button>
-                </div>
-                <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Prevents confusion between your goals and connections&apos; personal positions. Outreach will ask for referrals from employees, active openings from recruiters, and technical spots from founders.
-                </p>
-
-                {isCustomTargetRole ? (
-                  <input
-                    type="text"
-                    value={targetRole}
-                    onChange={(e) => setTargetRole(e.target.value)}
-                    placeholder="e.g. Senior Full Stack Engineer"
-                    className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-xs text-zinc-900 font-semibold focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {[
-                      'Full Stack Engineer',
-                      'Software Engineer',
-                      'Frontend Engineer',
-                      'Backend Engineer',
-                      'AI Engineer',
-                      'Founding Engineer'
-                    ].map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setTargetRole(r)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                          targetRole === r
-                            ? 'bg-[#0A66C2] text-white shadow-xs'
-                            : 'bg-white text-zinc-700 border border-[#E0DFDC] hover:border-[#0A66C2] hover:text-[#0A66C2]'
-                        }`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <span className="font-semibold">Reading resume & detecting candidate background...</span>
               </div>
             )}
           </div>
         )}
+
+        {/* Profile Confirmation Form Step */}
+        <div className="bg-white border border-[#E0DFDC] rounded-xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E0DFDC] pb-3">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#0A66C2]">
+                Profile Verification
+              </span>
+              <h3 className="text-sm font-bold text-zinc-900 mt-0.5">
+                Confirm Your Details
+              </h3>
+              <p className="text-xs text-zinc-500">
+                Messages will be generated strictly using these confirmed details.
+              </p>
+            </div>
+            {isProfileConfirmed ? (
+              <span className="text-xs font-semibold text-[#057642] bg-[#057642]/10 border border-[#057642]/20 px-3 py-1 rounded-full flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#057642]" />
+                <span>Profile Confirmed</span>
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Confirmation Required</span>
+              </span>
+            )}
+          </div>
+
+          {confirmErrorMsg && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+              {confirmErrorMsg}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="block text-zinc-700 font-semibold mb-1">
+                Full Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={candidateName}
+                onChange={(e) => {
+                  setCandidateName(e.target.value);
+                  setIsProfileConfirmed(false);
+                }}
+                placeholder="e.g. Alex Johnson"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-700 font-semibold mb-1">
+                Target Role / Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={targetRole}
+                onChange={(e) => {
+                  setTargetRole(e.target.value);
+                  setIsProfileConfirmed(false);
+                }}
+                placeholder="e.g. Senior Software Engineer"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-700 font-semibold mb-1">
+                Years of Experience <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={expYearsInput}
+                onChange={(e) => {
+                  setExpYearsInput(e.target.value);
+                  setIsProfileConfirmed(false);
+                }}
+                placeholder="e.g. 4"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-700 font-semibold mb-1">
+                Background / Domain <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={domainInput}
+                onChange={(e) => {
+                  setDomainInput(e.target.value);
+                  setIsProfileConfirmed(false);
+                }}
+                placeholder="e.g. B2B SaaS & Distributed Systems"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-zinc-700 font-semibold mb-1">
+                Technical Skills (comma-separated) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={skillsInput}
+                onChange={(e) => {
+                  setSkillsInput(e.target.value);
+                  setIsProfileConfirmed(false);
+                }}
+                placeholder="e.g. React, Next.js, TypeScript, Node.js, GraphQL"
+                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+              />
+            </div>
+
+            {workflow === 'agency-leads' && (
+              <>
+                <div className="sm:col-span-2">
+                  <label className="block text-zinc-700 font-semibold mb-1">
+                    Agency Service Summary <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencySummaryInput}
+                    onChange={(e) => {
+                      setAgencySummaryInput(e.target.value);
+                      setIsProfileConfirmed(false);
+                    }}
+                    placeholder="e.g. boutique engineering team helping startups build scalable web products"
+                    className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-zinc-700 font-semibold mb-1">
+                    Agency Offering <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyOfferingInput}
+                    onChange={(e) => {
+                      setAgencyOfferingInput(e.target.value);
+                      setIsProfileConfirmed(false);
+                    }}
+                    placeholder="e.g. shipping production MVPs, feature roadmaps, and automation"
+                    className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleConfirmProfile}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-xs shadow-xs transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Confirm & Save Profile</span>
+            </button>
+          </div>
+        </div>
 
         {/* Step 2: Connections CSV Dropbox */}
         <div className="bg-white border border-[#E0DFDC] rounded-xl p-6 shadow-xs space-y-3">
@@ -508,9 +597,9 @@ export function WorkflowView({
         <div className="flex items-center justify-end pt-2">
           <button
             onClick={handleContinue}
-            disabled={!canContinue || isProcessing}
+            disabled={!isReadyToProceed || isProcessing}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-xs sm:text-sm shadow-xs transition-all ${
-              canContinue && !isProcessing
+              isReadyToProceed && !isProcessing
                 ? 'bg-[#0A66C2] hover:bg-[#004182] text-white cursor-pointer active:scale-[0.98]'
                 : 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
             }`}

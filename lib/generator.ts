@@ -1,5 +1,4 @@
 import type { Prospect, JobOpportunity, UserProfile, OutreachGoal, PersonaType } from '@/types';
-import { DEFAULT_PROFILE } from './profile';
 import { resolveProspectPersona } from './classifier';
 
 export type MessageAngle = 'standard' | 'founding' | 'ai_rag' | 'product_ownership';
@@ -11,8 +10,9 @@ export interface MessageContext {
   hasSpecificCompany: boolean;
   prospectTitle: string;
   targetRole: string;
-  expYears: number;
+  expYears?: number;
   expText: string;
+  expClause: string;
   primaryStack: string;
   shortStack: string;
   domain: string;
@@ -81,7 +81,7 @@ export function sanitizeFirstName(rawName?: string): string {
   if (!rawName) return 'there';
   const cleaned = rawName
     .replace(/^(mr|mrs|ms|dr|prof)\.?\s+/i, '')
-    .replace(/[^a-zA-Z\s'-]/g, '')
+    .replace(/[^\p{L}\s'-]/gu, '')
     .trim();
   const first = cleaned.split(/\s+/)[0];
   if (!first || first.length < 2) return 'there';
@@ -107,7 +107,7 @@ export function sanitizeCompanyName(rawCompany?: string): { clean: string; isGen
   }
 
   const cleaned = rawCompany
-    .replace(/,?\s*(inc\.?|llc\.?|ltd\.?|pvt\.?\s*ltd\.?|private limited|corporation|corp\.?|gmbh|co\.?)$/i, '')
+    .replace(/(,\s*|\s+)(inc\.?|llc\.?|ltd\.?|pvt\.?\s*ltd\.?|private limited|corporation|corp\.?|gmbh|co\.?)$/i, '')
     .trim();
 
   return { clean: cleaned || 'your team', isGeneric: false };
@@ -121,10 +121,10 @@ export function formatConciseSkills(profile: UserProfile): { primary: string; sh
     ? profile.primarySkills
     : (profile.skills && profile.skills.length > 0)
     ? profile.skills
-    : ['modern tech stacks'];
+    : [];
 
-  if (pool.length === 1 && pool[0] === 'modern tech stacks') {
-    return { primary: 'modern tech stacks', short: 'core technologies' };
+  if (pool.length === 0) {
+    return { primary: '', short: '' };
   }
 
   const short = pool.slice(0, 2).join(' and ');
@@ -151,7 +151,7 @@ export function resolveTargetRole(
       return jobOrRole.title;
     }
   }
-  return profile.targetRole || profile.targetRoles?.[0] || 'Full Stack Engineer';
+  return profile.targetRole || profile.targetRoles?.[0] || '';
 }
 
 /**
@@ -310,7 +310,7 @@ export function validateMessageQuality(
  * 1. JOB HUNT STRATEGIES
  */
 function buildJobHuntDay0(ctx: MessageContext): string {
-  const { firstName, senderName, companyName, hasSpecificCompany, targetRole, expText, primaryStack, shortStack, domain, angle, persona } = ctx;
+  const { firstName, senderName, companyName, hasSpecificCompany, targetRole, expClause, primaryStack, shortStack, domain, angle, persona } = ctx;
 
   // A. FOUNDER / CXO
   if (persona === 'founder') {
@@ -323,7 +323,7 @@ function buildJobHuntDay0(ctx: MessageContext): string {
 
 Came across ${compRef} and really liked your approach to building in this space.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, specializing in early-stage 0 to 1 product development where navigating ambiguity and moving fast are key.
+I'm a ${targetRole} with ${expClause} in ${domain}, specializing in early-stage 0 to 1 product development where navigating ambiguity and moving fast are key.
 
 I've worked extensively across ${shortStack}, comfortable owning systems end-to-end with high autonomy.
 
@@ -340,7 +340,7 @@ ${senderName}`;
 
 I've been following ${compRef}. Really compelling product direction.
 
-I'm a ${targetRole} with ${expText} of experience building production software across ${primaryStack} in ${domain}.
+I'm a ${targetRole} with ${expClause} building production software across ${primaryStack} in ${domain}.
 
 I'm currently exploring new engineering roles and wanted to see if you're looking to add an engineer with strong execution ability in this stack.
 
@@ -355,7 +355,7 @@ ${senderName}`;
 
 Came across ${compRef} and really appreciate how you're executing on the product side.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, focused on high-autonomy product development where engineers talk to users and ship features end-to-end.
+I'm a ${targetRole} with ${expClause} in ${domain}, focused on high-autonomy product development where engineers talk to users and ship features end-to-end.
 
 I'm currently exploring opportunities and wanted to ask: are you looking to bring on an engineer who can own features with minimal overhead?
 
@@ -370,7 +370,7 @@ ${senderName}`;
 
 Saw ${compRef} and wanted to reach out directly.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, specializing in ${primaryStack}.
+I'm a ${targetRole} with ${expClause} in ${domain}, specializing in ${primaryStack}.
 
 I'm currently exploring new engineering opportunities and wanted to ask: are you looking to add hands-on technical talent to the team?
 
@@ -389,7 +389,7 @@ ${senderName}`;
 
 Came across your profile leading engineering${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience architecting and shipping systems in ${domain}, working primarily across ${shortStack}.
+I'm a ${targetRole} with ${expClause} architecting and shipping systems in ${domain}, working primarily across ${shortStack}.
 
 I'm currently exploring new opportunities and wanted to check if you're looking for an engineer who operates comfortably with high autonomy and rapid iteration.
 
@@ -404,7 +404,7 @@ ${senderName}`;
 
 Came across your profile while researching the tech team${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience building robust production software across ${primaryStack} in ${domain}.
+I'm a ${targetRole} with ${expClause} building robust production software across ${primaryStack} in ${domain}.
 
 I'm currently looking for engineering opportunities and wanted to see if you're looking to add engineers who can ship reliable systems without unnecessary complexity.
 
@@ -419,7 +419,7 @@ ${senderName}`;
 
 I came across your profile while looking into the engineering group${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, focused on strong product ownership, handling everything from architecture to production deployment across ${shortStack}.
+I'm a ${targetRole} with ${expClause} in ${domain}, focused on strong product ownership, handling everything from architecture to production deployment across ${shortStack}.
 
 I'm exploring new roles and wanted to ask if you're looking to bring on someone technical who can take full feature ownership.
 
@@ -434,7 +434,7 @@ ${senderName}`;
 
 I came across your profile while looking into the engineering team${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, building and shipping products end-to-end across ${primaryStack}. I'm accustomed to high autonomy, moving fast, and taking features from architecture to deployment with minimal management friction.
+I'm a ${targetRole} with ${expClause} in ${domain}, building and shipping products end-to-end across ${primaryStack}. I'm accustomed to high autonomy, moving fast, and taking features from architecture to deployment with minimal management friction.
 
 I'm currently exploring engineering opportunities and wanted to see if you're looking to add someone to the team who can take ownership across the stack.
 
@@ -453,7 +453,7 @@ ${senderName}`;
 
 I'm currently exploring new ${targetRole} roles and came across ${hasSpecificCompany ? companyName : 'your team'}.
 
-I bring ${expText} of experience building production systems with ${primaryStack} in ${domain}.
+I bring ${expClause} building production systems with ${primaryStack} in ${domain}.
 
 Do you have any current or upcoming engineering openings${compRef} where a high-ownership builder would be a strong match?
 
@@ -468,7 +468,7 @@ ${senderName}`;
 
 I'm exploring ${targetRole} opportunities and wanted to check in regarding engineering roles${compRef}.
 
-I have ${expText} of experience shipping production applications with ${primaryStack} in ${domain}.
+I have ${expClause} shipping production applications with ${primaryStack} in ${domain}.
 
 Are there any active openings on your team where this technical background aligns with your hiring roadmap?
 
@@ -483,7 +483,7 @@ ${senderName}`;
 
 I'm currently exploring ${targetRole} opportunities and came across the engineering team${compRef}.
 
-I have ${expText} of experience delivering end-to-end features in ${domain} with ${primaryStack}, specializing in autonomous product delivery and clean architecture.
+I have ${expClause} delivering end-to-end features in ${domain} with ${primaryStack}, specializing in autonomous product delivery and clean architecture.
 
 Are you hiring for any software engineering positions that align with my background?
 
@@ -498,7 +498,7 @@ ${senderName}`;
 
 I'm currently exploring new ${targetRole} opportunities and came across ${hasSpecificCompany ? companyName : 'your open positions'}.
 
-I bring ${expText} of experience in ${domain}, building products end-to-end with ${primaryStack}.
+I bring ${expClause} in ${domain}, building products end-to-end with ${primaryStack}.
 
 Are there any current ${targetRole} or technical openings${compRef} that could be a fit for my profile?
 
@@ -516,7 +516,7 @@ ${senderName}`;
 
 Came across your profile while looking into engineering${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, working with ${primaryStack}.
+I'm a ${targetRole} with ${expClause} in ${domain}, working with ${primaryStack}.
 
 I'm currently exploring new roles and wanted to see if you'd be open to referring me if your team or an adjacent engineering squad is looking for a hands-on builder?
 
@@ -531,7 +531,7 @@ ${senderName}`;
 
 Saw your work on the engineering side${compRef} and wanted to reach out.
 
-I'm a ${targetRole} with ${expText} of experience across ${primaryStack} in ${domain}, currently looking for my next role.
+I'm a ${targetRole} with ${expClause} across ${primaryStack} in ${domain}, currently looking for my next role.
 
 If you feel my background could be a fit for any engineering openings${compRef}, would you be open to pointing me in the right direction or offering a referral?
 
@@ -544,7 +544,7 @@ ${senderName}`;
 
 Came across your profile while exploring the engineering team${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, building and shipping features end-to-end with ${primaryStack}.
+I'm a ${targetRole} with ${expClause} in ${domain}, building and shipping features end-to-end with ${primaryStack}.
 
 I'm currently looking for new opportunities and wanted to check: if there are open engineering roles, would you be comfortable putting in a referral?
 
@@ -559,7 +559,7 @@ ${senderName}`;
 
 Came across your profile while looking into the engineering team${compRef}.
 
-I'm a ${targetRole} with ${expText} of experience in ${domain}, working with ${primaryStack}, and I'm currently exploring new opportunities.
+I'm a ${targetRole} with ${expClause} in ${domain}, working with ${primaryStack}, and I'm currently exploring new opportunities.
 
 Since you're already working on the engineering side${compRef}, I wanted to reach out directly.
 
@@ -577,13 +577,16 @@ function buildAgencyLeadsDay0(ctx: MessageContext): string {
   const compName = hasSpecificCompany ? companyName : 'your company';
 
   if (persona === 'employee' || persona === 'recruiter') {
+    const studioDesc = agencySummary
+      ? `I lead a ${agencySummary} that partners with tech teams`
+      : 'We partner with high-growth technology teams';
     return `Hi ${firstName},
 
 Came across your profile while looking into the engineering team at ${compName}.
 
-I run a product engineering studio that partners with tech teams to help tackle backlog features and integrations when internal sprints are overloaded.
+${studioDesc} to help tackle roadmap backlog features, custom integrations, and sprint spillover when internal engineers are at full capacity.
 
-Wanted to reach out directly to see how your team handles roadmap spillover. Open to connecting if having on-demand engineering support is ever useful.
+Wanted to reach out directly to see how your team currently handles roadmap overflow. Open to connecting if having reliable external engineering support is ever helpful.
 
 Thanks,
 ${senderName}`;
@@ -610,7 +613,7 @@ ${senderName}`;
 
 Came across ${compName} and really liked the direction you're taking with the product.
 
-I run a specialized engineering studio helping startups integrate practical AI, automated workflows, and custom web applications into their existing stacks.
+I run a ${agencySummary || 'development consultancy'} helping startups integrate practical AI, automated workflows, and custom web applications into their existing stacks.
 
 Founders we work with usually want to ship intelligent features without distracting their core team from primary roadmap goals.
 
@@ -707,9 +710,9 @@ ${senderName}`;
 
 Came across your profile while looking for engineers with strong experience in ${shortStack || 'software development'}.
 
-I'm currently working on product initiatives and we're looking for someone who can help take ownership as a ${targetRole}.
+I'm currently scaling our team and product initiatives, and we're looking for someone who can take ownership in a ${targetRole} role.
 
-Your background with ${roleContext} stood out, and I think you could make a strong impact on what we're building.
+Your background with ${roleContext} stood out, and I think you could make a strong impact on what our team is building.
 
 Would you be open to a quick conversation about the opportunity?
 
@@ -772,7 +775,7 @@ Came across your profile while looking for an experienced engineer in ${shortSta
 
 I'm currently working on a project build where I may need additional hands-on development help, particularly around architecture, clean APIs, and shipping responsive user interfaces.
 
-Your background with ${domain} caught my attention, and I wanted to see if you might have bandwidth for contract or freelance collaboration.
+Your background with ${domain} caught my attention, and I wanted to see if you might have availability for contract or freelance collaboration.
 
 If you're taking on projects right now, would love to have a brief conversation about the scope and timeline.
 
@@ -828,7 +831,8 @@ Just following up on my note above.
 
 If you're currently adding engineers to the team, I'd be happy to share my profile and have a quick conversation.
 
-Thanks!`;
+Best,
+${senderName}`;
   }
 
   if (persona === 'cto_lead') {
@@ -970,17 +974,49 @@ export function generatePersonalizedDM(
   outreachGoal?: OutreachGoal,
   overridePersona?: PersonaType
 ): GeneratedSequence {
-  const profile = userProfile || DEFAULT_PROFILE;
+  if (!userProfile) {
+    throw new Error('userProfile is required to generate personalized messages');
+  }
+  if (!userProfile.name || !userProfile.name.trim()) {
+    throw new Error('userProfile.name is required');
+  }
+
+  const profile = userProfile;
   const firstName = sanitizeFirstName(prospect.name);
   const companyInfo = sanitizeCompanyName(prospect.company);
-  const senderName = profile.name || 'Your Name';
-  const expYears = profile.yearsOfExperience || 3;
-  const expText = `${expYears}+ years`;
+  const senderName = profile.name.trim();
+  const expYears = profile.yearsOfExperience;
+  const expText = (expYears !== undefined && expYears !== null) ? `${expYears}+ years` : '';
+  const expClause = (expYears !== undefined && expYears !== null) ? `${expYears}+ years of experience` : 'experience';
   const skills = formatConciseSkills(profile);
   const targetRole = resolveTargetRole(profile, jobOrRole, prospect.jobTitle);
-  const persona: PersonaType = overridePersona || prospect.persona || resolveProspectPersona(prospect);
-  const goal: OutreachGoal = outreachGoal || prospect.outreachGoal || 'job-hunt';
-  const domain = profile.background || 'Software Engineering & Production Systems';
+  const persona: PersonaType = overridePersona || resolveProspectPersona(prospect);
+  const goal: OutreachGoal = outreachGoal || 'job-hunt';
+  const domain = profile.background?.trim() || '';
+  const agencySummary = profile.agencyServiceSummary?.trim() || '';
+  const agencyOffering = profile.agencyOffering?.trim() || '';
+
+  const validationIssues: QualityIssue[] = [];
+  if (!senderName) {
+    validationIssues.push({ rule: 'missing-sender-name', severity: 'error', message: 'Sender name is required.' });
+  }
+  if (!targetRole) {
+    validationIssues.push({ rule: 'missing-target-role', severity: 'error', message: 'Target role is required.' });
+  }
+  if (!domain) {
+    validationIssues.push({ rule: 'missing-domain', severity: 'error', message: 'Domain / background is required.' });
+  }
+  if (!skills.primary) {
+    validationIssues.push({ rule: 'missing-skills', severity: 'error', message: 'Technical skills are required.' });
+  }
+  if (goal === 'agency-leads') {
+    if (!agencySummary) {
+      validationIssues.push({ rule: 'missing-agency-summary', severity: 'error', message: 'Agency service summary is required for agency leads.' });
+    }
+    if (!agencyOffering) {
+      validationIssues.push({ rule: 'missing-agency-offering', severity: 'error', message: 'Agency offering is required for agency leads.' });
+    }
+  }
 
   const ctx: MessageContext = {
     firstName,
@@ -991,11 +1027,12 @@ export function generatePersonalizedDM(
     targetRole,
     expYears,
     expText,
+    expClause,
     primaryStack: skills.primary,
     shortStack: skills.short,
     domain,
-    agencySummary: profile.agencyServiceSummary || 'small product development team helping startups build and ship web/mobile products without needing to immediately build a full engineering team',
-    agencyOffering: profile.agencyOffering || 'building and shipping production MVPs, feature roadmaps, and automation',
+    agencySummary,
+    agencyOffering,
     persona,
     goal,
     angle
@@ -1026,13 +1063,40 @@ export function generatePersonalizedDM(
   const cleanDay5 = removeEmDashes(day5);
   const cleanDay12 = removeEmDashes(day12);
 
-  // Validate Day 0 message quality
-  const validation = validateMessageQuality(cleanDay0, {
+  // Validate Day 0, Day 5, and Day 12 message quality
+  const val0 = validateMessageQuality(cleanDay0, {
     persona,
     goal,
     touchpoint: 'day0',
     firstName
   });
+  const val5 = validateMessageQuality(cleanDay5, {
+    persona,
+    goal,
+    touchpoint: 'day5',
+    firstName
+  });
+  const val12 = validateMessageQuality(cleanDay12, {
+    persona,
+    goal,
+    touchpoint: 'day12',
+    firstName
+  });
+
+  const allIssues = [
+    ...validationIssues,
+    ...val0.issues,
+    ...val5.issues,
+    ...val12.issues
+  ];
+
+  const validation: MessageValidationResult = {
+    isValid: !allIssues.some((i) => i.severity === 'error'),
+    wordCount: val0.wordCount,
+    targetRange: val0.targetRange,
+    hasGreetingName: val0.hasGreetingName && val5.hasGreetingName && val12.hasGreetingName,
+    issues: allIssues
+  };
 
   return {
     day0: cleanDay0,

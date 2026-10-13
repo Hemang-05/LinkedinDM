@@ -29,7 +29,8 @@ import { copyTextToClipboard, openLinkedInTab } from '@/lib/clipboard';
 import {
   getClientProfile,
   appendClientOutreachLog,
-  updateClientProspect
+  updateClientProspect,
+  isProfileComplete
 } from '@/lib/clientStorage';
 import { generatePersonalizedDM } from '@/lib/generator';
 
@@ -94,17 +95,22 @@ export function SegregatedConnectionsView({
 
   const handleQuickCopyAndOpen = async (p: Prospect) => {
     const prof = getClientProfile();
+    if (!prof || !isProfileComplete(prof, workflow)) {
+      alert('Please upload your resume and confirm your profile details on the Home tab first.');
+      return;
+    }
+
     const targetRole =
       p.jobOpportunity?.title && p.jobOpportunity.title !== p.jobTitle
         ? p.jobOpportunity.title
-        : prof.targetRole || prof.targetRoles?.[0] || 'Full Stack Engineer';
+        : prof.targetRole || prof.targetRoles?.[0] || '';
 
     // 1. Synchronously open LinkedIn
     openLinkedInTab(p.linkedinUrl, p.name, p.company);
 
     // 2. Generate persona-aware DM
     const generated = generatePersonalizedDM(p, targetRole, 'standard', prof, workflow);
-    const msg = p.draftedMessage || generated.day0;
+    const msg = generated.day0;
 
     // 3. Write to clipboard
     await copyTextToClipboard(msg);
@@ -126,7 +132,7 @@ export function SegregatedConnectionsView({
     const role =
       lastOpenedProspect.jobOpportunity?.title && lastOpenedProspect.jobOpportunity.title !== lastOpenedProspect.jobTitle
         ? lastOpenedProspect.jobOpportunity.title
-        : prof.targetRole || prof.targetRoles?.[0] || 'Full Stack Engineer';
+        : prof?.targetRole || prof?.targetRoles?.[0] || '';
 
     const logEntry = {
       date: today,

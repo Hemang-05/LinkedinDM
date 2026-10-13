@@ -135,7 +135,7 @@ export interface OutreachLogEntry {
 export interface UserProfile {
   name: string;
   title: string;
-  yearsOfExperience: number;
+  yearsOfExperience?: number;
   skills: string[];
   primarySkills?: string[];
   secondarySkills?: string[];

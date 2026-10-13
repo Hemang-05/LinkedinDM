@@ -5,7 +5,6 @@ import { parseResumeBuffer } from '@/lib/resumeParser';
 import { Prospect, ScoreExplanation } from '@/types';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
-const REQUIRED_SKILLS = ['React', 'Next.js', 'Python', 'FastAPI', 'PostgreSQL'];
 
 // Exact header names first (LinkedIn's export uses these), fuzzy fallback only if missing.
 const ALIASES: Record<string, string[]> = {
@@ -149,8 +148,7 @@ export async function POST(request: Request) {
           description: `${cls.segregationGroup} contact at ${company} for ${targetRole}`,
           source: 'LinkedIn CSV Import',
           hiringSignals: hiring ? ['Hiring Lead'] : [],
-          requiredSkills: REQUIRED_SKILLS,
-          minExperienceYears: 3
+          requiredSkills: extractedCandidate?.skills || []
         }
       };
 

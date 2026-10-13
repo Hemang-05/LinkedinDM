@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getStoredProspects, addProspect, updateProspectStatus } from '@/lib/storage';
 import { classifyProspectTitle } from '@/lib/classifier';
 import { calculateScoreAndMatching } from '@/lib/scoring';
-import { generatePersonalizedDM } from '@/lib/generator';
 import { Prospect } from '@/types';
 
 export async function GET(request: Request) {
@@ -78,15 +77,12 @@ export async function POST(request: Request) {
         description: jobDescription || '',
         source: 'Manual Entry',
         hiringSignals: ['Direct Opportunity'],
-        requiredSkills: ['React', 'Next.js', 'Python', 'FastAPI', 'PostgreSQL']
+        requiredSkills: Array.isArray(body.requiredSkills) ? body.requiredSkills : []
       } : undefined
     };
 
     newProspect.score = calculateScoreAndMatching(newProspect, newProspect.jobOpportunity);
-    const messages = generatePersonalizedDM(newProspect, newProspect.jobOpportunity);
-    newProspect.draftedMessage = messages.day0;
-    newProspect.followUpDay5Message = messages.day5;
-    newProspect.followUpDay12Message = messages.day12;
+    // Note: DMs are generated dynamically on client at display time using user profile
 
     const saved = addProspect(newProspect);
     return NextResponse.json({ success: true, prospect: saved });

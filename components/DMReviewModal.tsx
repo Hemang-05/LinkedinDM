@@ -7,7 +7,8 @@ import {
   appendClientOutreachLog,
   updateClientProspect,
   getClientProfile,
-  saveClientProfile
+  saveClientProfile,
+  isProfileComplete
 } from '@/lib/clientStorage';
 import { generatePersonalizedDM, MessageAngle, validateMessageQuality, sanitizeFirstName } from '@/lib/generator';
 import { resolveProspectPersona } from '@/lib/classifier';
@@ -47,15 +48,15 @@ export function DMReviewModal({
   onProspectUpdated,
   workflow
 }: DMReviewModalProps) {
-  const [userProfile, setUserProfile] = useState<UserProfile>(getClientProfile());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getClientProfile());
   const [activeTab, setActiveTab] = useState<'day0' | 'day5' | 'day12'>('day0');
   const [selectedAngle, setSelectedAngle] = useState<MessageAngle>('standard');
   const [copied, setCopied] = useState(false);
   const [showScoreDetails, setShowScoreDetails] = useState(false);
 
-  // Outreach Goal state (initialized from active workflow or prospect data)
+  // Outreach Goal state (initialized from active workflow or default)
   const [selectedGoal, setSelectedGoal] = useState<OutreachGoal>(
-    (workflow as OutreachGoal) || prospect?.outreachGoal || 'job-hunt'
+    (workflow as OutreachGoal) || 'job-hunt'
   );
 
   // Persona state (auto-detected with option to override)
@@ -65,11 +66,11 @@ export function DMReviewModal({
   const defaultTargetRole =
     prospect?.jobOpportunity?.title && prospect?.jobOpportunity?.title !== prospect?.jobTitle
       ? prospect.jobOpportunity.title
-      : userProfile.targetRole || userProfile.targetRoles?.[0] || 'Full Stack Engineer';
+      : userProfile?.targetRole || userProfile?.targetRoles?.[0] || '';
   const [targetRole, setTargetRole] = useState<string>(defaultTargetRole);
   const [isCustomRole, setIsCustomRole] = useState(false);
 
-  const [message, setMessage] = useState(prospect?.draftedMessage || '');
+  const [message, setMessage] = useState('');
 
   // 1-Click Copy & Open Profile tracking state
   const [openedTabForOutreach, setOpenedTabForOutreach] = useState(false);
@@ -83,44 +84,57 @@ export function DMReviewModal({
 
   // Sender name signature state
   const [isEditingSenderName, setIsEditingSenderName] = useState(false);
-  const [senderNameInput, setSenderNameInput] = useState(userProfile.name || '');
+  const [senderNameInput, setSenderNameInput] = useState(userProfile?.name || '');
 
   // Initialize persona and message on mount or prospect change
   useEffect(() => {
     if (!prospect) return;
     const prof = getClientProfile();
     setUserProfile(prof);
-    setSenderNameInput(prof.name || '');
+    setSenderNameInput(prof?.name || '');
 
-    const initialGoal: OutreachGoal = (workflow as OutreachGoal) || prospect.outreachGoal || 'job-hunt';
+    const initialGoal: OutreachGoal = (workflow as OutreachGoal) || 'job-hunt';
     setSelectedGoal(initialGoal);
 
+    // Stop trusting stale cached persona: resolve dynamically
     const initialPersona = resolveProspectPersona(prospect);
     setSelectedPersona(initialPersona);
 
-    const generated = generatePersonalizedDM(
-      prospect,
-      targetRole,
-      selectedAngle,
-      prof,
-      initialGoal,
-      initialPersona
-    );
+    const effectiveRole =
+      targetRole ||
+      (prospect.jobOpportunity?.title && prospect.jobOpportunity.title !== prospect.jobTitle
+        ? prospect.jobOpportunity.title
+        : prof?.targetRole || prof?.targetRoles?.[0] || '');
 
-    const stored =
-      activeTab === 'day0'
-        ? prospect.draftedMessage
-        : activeTab === 'day5'
-        ? prospect.followUpDay5Message
-        : prospect.followUpDay12Message;
-
-    let initialMsg = stored || generated[activeTab];
-    // If a previously stored message had a different sender name, update the sign-off with current profile name
-    if (stored && prof.name && !stored.includes(prof.name)) {
-      initialMsg = stored.replace(/Best,\n[^\n]+/g, `Best,\n${prof.name}`);
+    if (effectiveRole && !targetRole) {
+      setTargetRole(effectiveRole);
     }
 
-    setMessage(initialMsg);
+    if (!prof || !isProfileComplete(prof, initialGoal)) {
+      setMessage('');
+      setCopied(false);
+      setDuplicateWarning(null);
+      setLogSuccess(prospect.status === 'Contacted');
+      setOpenedTabForOutreach(false);
+      setShowReturnPrompt(false);
+      return;
+    }
+
+    try {
+      const generated = generatePersonalizedDM(
+        prospect,
+        effectiveRole,
+        selectedAngle,
+        prof,
+        initialGoal,
+        initialPersona
+      );
+      setMessage(generated[activeTab]);
+    } catch (err) {
+      console.error('Failed generating personalized DM:', err);
+      setMessage('');
+    }
+
     setCopied(false);
     setDuplicateWarning(null);
     setLogSuccess(prospect.status === 'Contacted');
@@ -231,22 +245,29 @@ export function DMReviewModal({
     nextRole: string = targetRole,
     nextTab: 'day0' | 'day5' | 'day12' = activeTab
   ) => {
-    const generated = generatePersonalizedDM(
-      prospect,
-      nextRole,
-      nextAngle,
-      userProfile,
-      nextGoal,
-      nextPersona
-    );
-    const newMsg = generated[nextTab];
-    setMessage(newMsg);
-    updateClientProspect(prospect.id, prospect.status, newMsg);
+    if (!userProfile || !isProfileComplete(userProfile, nextGoal)) {
+      setMessage('');
+      return;
+    }
+    try {
+      const generated = generatePersonalizedDM(
+        prospect,
+        nextRole,
+        nextAngle,
+        userProfile,
+        nextGoal,
+        nextPersona
+      );
+      const newMsg = generated[nextTab];
+      setMessage(newMsg);
+    } catch (err) {
+      console.error('Error generating personalized DM:', err);
+      setMessage('');
+    }
   };
 
   const handleMessageChange = (newVal: string) => {
     setMessage(newVal);
-    updateClientProspect(prospect.id, prospect.status, newVal);
   };
 
   const handleSwitchTab = (tab: 'day0' | 'day5' | 'day12') => {
@@ -271,7 +292,8 @@ export function DMReviewModal({
 
   const handleTargetRoleChange = (newRole: string) => {
     setTargetRole(newRole);
-    const updatedProfile = { ...userProfile, targetRole: newRole };
+    if (!userProfile) return;
+    const updatedProfile: UserProfile = { ...userProfile, targetRole: newRole };
     setUserProfile(updatedProfile);
     saveClientProfile(updatedProfile);
     regenerateMessage(selectedGoal, selectedPersona, selectedAngle, newRole, activeTab);
@@ -283,8 +305,8 @@ export function DMReviewModal({
 
   const handleSaveSenderName = (newName: string) => {
     const trimmed = newName.trim();
-    if (!trimmed) return;
-    const updated = { ...userProfile, name: trimmed };
+    if (!trimmed || !userProfile) return;
+    const updated: UserProfile = { ...userProfile, name: trimmed };
     setUserProfile(updated);
     saveClientProfile(updated);
     setIsEditingSenderName(false);
@@ -752,7 +774,7 @@ export function DMReviewModal({
                   <button
                     type="button"
                     onClick={() => {
-                      setSenderNameInput(userProfile.name);
+                      setSenderNameInput(userProfile?.name || '');
                       setIsEditingSenderName(false);
                     }}
                     className="px-2.5 py-1 text-zinc-500 hover:text-zinc-700 text-xs font-medium cursor-pointer"
@@ -764,12 +786,12 @@ export function DMReviewModal({
                 <div className="flex items-center justify-between text-xs text-zinc-500">
                   <span className="text-[11px] flex items-center gap-1.5">
                     <span>Signed as:</span>
-                    <strong className="text-zinc-800 font-semibold">{userProfile.name || 'Your Name'}</strong>
+                    <strong className="text-zinc-800 font-semibold">{userProfile?.name || 'Incomplete Profile'}</strong>
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      setSenderNameInput(userProfile.name);
+                      setSenderNameInput(userProfile?.name || '');
                       setIsEditingSenderName(true);
                     }}
                     className="text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer"
@@ -781,12 +803,24 @@ export function DMReviewModal({
             </div>
           </div>
 
+          {!isProfileComplete(userProfile, selectedGoal) && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Please upload your resume and confirm your profile details before generating messages.</span>
+            </div>
+          )}
+
           {/* Action Buttons Section */}
           <div className="space-y-3 pt-2">
             {/* 1-Click Power Action: Copy DM and open LinkedIn tab */}
             <button
               onClick={handleCopyAndOpenProfile}
-              className="w-full py-3.5 px-4 rounded-full bg-[#0A66C2] hover:bg-[#004182] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+              disabled={!isProfileComplete(userProfile, selectedGoal) || !message}
+              className={`w-full py-3.5 px-4 rounded-full text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all ${
+                isProfileComplete(userProfile, selectedGoal) && message
+                  ? 'bg-[#0A66C2] hover:bg-[#004182] active:scale-[0.98] cursor-pointer'
+                  : 'bg-zinc-300 text-zinc-500 cursor-not-allowed'
+              }`}
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
               <span>Copy DM & Open Profile (1-Click)</span>
@@ -809,7 +843,12 @@ export function DMReviewModal({
             <div className="grid grid-cols-2 gap-2 pt-0.5">
               <button
                 onClick={handleCopy}
-                className="py-2.5 px-3 rounded-full bg-white hover:bg-[#0A66C2]/10 text-[#0A66C2] text-xs font-semibold border border-[#0A66C2] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                disabled={!isProfileComplete(userProfile, selectedGoal) || !message}
+                className={`py-2.5 px-3 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                  isProfileComplete(userProfile, selectedGoal) && message
+                    ? 'bg-white hover:bg-[#0A66C2]/10 text-[#0A66C2] border border-[#0A66C2] cursor-pointer'
+                    : 'bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed'
+                }`}
               >
                 <Copy className="w-3.5 h-3.5 text-[#0A66C2]" />
                 <span>Copy Only</span>

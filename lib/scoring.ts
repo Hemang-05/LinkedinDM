@@ -1,7 +1,6 @@
-import { Prospect, JobOpportunity, ScoreExplanation, ScoreBreakdownItem } from '@/types';
-import { MY_PROFILE } from './profile';
+import { Prospect, JobOpportunity, ScoreExplanation, ScoreBreakdownItem, UserProfile } from '@/types';
 
-// Built once at module load (previously rebuilt on every call)
+// Built once at module load as default fallback
 const KNOWN_PROFILE_SKILLS = [
   { name: 'React', patterns: ['react'] },
   { name: 'Next.js', patterns: ['next.js', 'nextjs'] },
@@ -12,11 +11,20 @@ const KNOWN_PROFILE_SKILLS = [
   { name: 'LLM/RAG', patterns: ['llm', 'rag', 'genai', 'langchain', 'openai', 'agents'] },
   { name: 'Docker', patterns: ['docker', 'containers'] }
 ] as const;
-const TARGET_ROLES_LOWER = MY_PROFILE.targetRoles.map((r) => ({ raw: r, lower: r.toLowerCase() }));
+
+const DEFAULT_TARGET_ROLES = [
+  'Software Engineer',
+  'Full Stack Engineer',
+  'Frontend Engineer',
+  'Backend Engineer',
+  'Product Engineer',
+  'Developer'
+];
 
 export function calculateScoreAndMatching(
   prospect: Partial<Prospect>,
-  job?: JobOpportunity
+  job?: JobOpportunity,
+  userProfile?: UserProfile | null
 ): ScoreExplanation {
   const items: ScoreBreakdownItem[] = [];
   const strongMatches: string[] = [];
@@ -31,7 +39,12 @@ export function calculateScoreAndMatching(
   // 1. Role Match (+25 points)
   let roleMatch = false;
   let roleReason = 'Target role mismatch';
-  for (const targetRole of TARGET_ROLES_LOWER) {
+  const rolesToMatch = userProfile?.targetRoles && userProfile.targetRoles.length > 0
+    ? userProfile.targetRoles
+    : DEFAULT_TARGET_ROLES;
+  const targetRolesLower = rolesToMatch.map((r) => ({ raw: r, lower: r.toLowerCase() }));
+
+  for (const targetRole of targetRolesLower) {
     if (roleText.includes(targetRole.lower)) {
       roleMatch = true;
       roleReason = `Matches target role: "${targetRole.raw}"`;
@@ -52,7 +65,9 @@ export function calculateScoreAndMatching(
 
   // 2. Stack Match (+20 points)
   const stackMatches: string[] = [];
-  const knownProfileSkills = KNOWN_PROFILE_SKILLS;
+  const knownProfileSkills = userProfile?.skills && userProfile.skills.length > 0
+    ? userProfile.skills.map(s => ({ name: s, patterns: [s.toLowerCase()] }))
+    : KNOWN_PROFILE_SKILLS;
 
   for (const skill of knownProfileSkills) {
     if (skill.patterns.some(p => descText.includes(p) || roleText.includes(p))) {
@@ -114,16 +129,31 @@ export function calculateScoreAndMatching(
   });
 
   // 4. Experience Match (+15 points)
-  let expPoints = 15;
-  let expReason = 'Profile experience (3+ years) matches mid/senior range';
+  const userYears = userProfile?.yearsOfExperience;
   const minYears = effectiveJob?.minExperienceYears || 3;
-  if (minYears > 6) {
-    expPoints = 5;
-    expReason = `Requires ${minYears}+ years experience (Profile has 3+ yrs)`;
-    gaps.push(`${minYears}+ years min experience requirement`);
-  } else if (minYears <= 4) {
-    expPoints = 15;
-    expReason = 'Ideal alignment for 3+ years experience';
+  let expPoints = 15;
+  let expReason = userYears !== undefined
+    ? `Profile experience (${userYears}+ years) matches requirements`
+    : 'Experience alignment for role';
+
+  if (userYears !== undefined) {
+    if (minYears > userYears + 3) {
+      expPoints = 5;
+      expReason = `Requires ${minYears}+ years experience (Profile has ${userYears}+ yrs)`;
+      gaps.push(`${minYears}+ years min experience requirement`);
+    } else if (minYears <= userYears + 1) {
+      expPoints = 15;
+      expReason = `Ideal alignment for ${userYears}+ years experience`;
+    }
+  } else {
+    if (minYears > 6) {
+      expPoints = 5;
+      expReason = `Requires ${minYears}+ years experience`;
+      gaps.push(`${minYears}+ years min experience requirement`);
+    } else {
+      expPoints = 15;
+      expReason = 'Matches role experience expectations';
+    }
   }
   items.push({
     category: 'Experience Match',
@@ -197,7 +227,7 @@ export function calculateScoreAndMatching(
   return {
     totalScore,
     items,
-    strongMatches: Array.from(new Set(strongMatches.length > 0 ? strongMatches : ['React', 'Next.js', 'Python', 'FastAPI'])),
+    strongMatches: Array.from(new Set(strongMatches.length > 0 ? strongMatches : (userProfile?.skills?.slice(0, 4) || []))),
     gaps: Array.from(new Set(gaps)),
     blockers,
     recommendedAction

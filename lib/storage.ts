@@ -2,6 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { Prospect, OutreachStatus } from '@/types';
 
+// TODO: Multi-tenant / Per-user isolation
+// Currently jobhunt_data.json is a single server-side file shared across all incoming requests
+// without authentication or per-user session partitioning.
+// In a multi-user environment, prospects written or read here will be globally shared.
+// Migrate to per-user storage (e.g., PostgreSQL with user_id or browser-scoped storage only).
 const DATA_FILE_PATH = path.join(process.cwd(), 'jobhunt_data.json');
 
 export function getStoredProspects(): Prospect[] {
