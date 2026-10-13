@@ -79,19 +79,30 @@ const NON_NAME_WORDS = new Set([
 const TECH_SKILLS_POOL = [
   // Web & Frontend
   'React',
+  'React.js',
   'Next.js',
+  'NextJS',
   'TypeScript',
   'JavaScript',
   'Vue.js',
+  'Vue',
   'Angular',
   'Svelte',
   'TailwindCSS',
+  'Tailwind CSS',
+  'Tailwind',
   'Redux',
+  'Zustand',
   'HTML5',
   'CSS3',
+  'HTML',
+  'CSS',
   // Backend & Languages
   'Node.js',
+  'NodeJS',
+  'Node',
   'Express',
+  'Express.js',
   'NestJS',
   'Python',
   'FastAPI',
@@ -122,6 +133,7 @@ const TECH_SKILLS_POOL = [
   'Jetpack Compose',
   // Data, AI & ML
   'SQL',
+  'NoSQL',
   'PyTorch',
   'TensorFlow',
   'Scikit-learn',
@@ -133,9 +145,14 @@ const TECH_SKILLS_POOL = [
   'Snowflake',
   'BigQuery',
   'LLM',
+  'LLMs',
   'RAG',
   'NLP',
   'LangChain',
+  'OpenAI',
+  'Generative AI',
+  'GenAI',
+  'AI Agents',
   // Cloud & DevOps
   'AWS',
   'GCP',
@@ -147,8 +164,13 @@ const TECH_SKILLS_POOL = [
   'Linux',
   'Jenkins',
   'GitHub Actions',
+  'Vercel',
+  'Git',
+  'GitHub',
+  'GitLab',
   // Databases & Messaging
   'PostgreSQL',
+  'Postgres',
   'MySQL',
   'MongoDB',
   'Redis',
@@ -157,10 +179,16 @@ const TECH_SKILLS_POOL = [
   'DynamoDB',
   'Cassandra',
   'SQLite',
+  'Supabase',
+  'Firebase',
+  'Prisma',
   // APIs & Architecture
   'REST APIs',
+  'RESTful APIs',
+  'REST API',
   'GraphQL',
   'gRPC',
+  'Postman',
   'Microservices',
   'System Design',
   'Distributed Systems'
@@ -236,15 +264,21 @@ function toTitleCase(str: string): string {
 /**
  * Extracts candidate name from resume text
  */
-export function extractCandidateName(text: string): string | null {
-  if (!text || text.trim().length === 0) return null;
+export function extractCandidateName(text: string, filename?: string): string | null {
+  if (!text || text.trim().length === 0) {
+    if (filename) return extractNameFromFilename(filename);
+    return null;
+  }
 
   const lines = text
     .split(/\r?\n/)
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  if (lines.length === 0) return null;
+  if (lines.length === 0) {
+    if (filename) return extractNameFromFilename(filename);
+    return null;
+  }
 
   // Search in the top 15 non-empty lines
   const topLines = lines.slice(0, 15);
@@ -294,6 +328,24 @@ export function extractCandidateName(text: string): string | null {
     }
   }
 
+  // 3. Fallback: filename check
+  if (filename) {
+    const nameFromFn = extractNameFromFilename(filename);
+    if (nameFromFn) return nameFromFn;
+  }
+
+  return null;
+}
+
+function extractNameFromFilename(filename: string): string | null {
+  const cleanFn = filename
+    .replace(/\.(pdf|docx|txt)$/i, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\b(resume|cv|biodata|profile|document|updated|latest|final|v\d+)\b/gi, '')
+    .trim();
+  if (isValidNameCandidate(cleanFn)) {
+    return toTitleCase(cleanFn);
+  }
   return null;
 }
 
@@ -310,7 +362,7 @@ function isValidNameCandidate(line: string): boolean {
   if (/[:;{}[\]\/\\_+=*&^%$#@!~?]/.test(line)) return false;
 
   const words = line.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 4) return false;
+  if (words.length < 1 || words.length > 4) return false;
 
   // Check each word
   for (const word of words) {
@@ -323,7 +375,8 @@ function isValidNameCandidate(line: string): boolean {
     if (NON_NAME_WORDS.has(cleanWord)) return false;
 
     // Reject single-letter words (unless middle initial like "K.")
-    if (cleanWord.length < 2 && words.length === 2) return false;
+    if (cleanWord.length < 2 && words.length > 1) return false;
+    if (words.length === 1 && cleanWord.length < 3) return false;
   }
 
   // The line should be either Title Cased (e.g. "Rohit Sharma") or ALL CAPS (e.g. "ROHIT SHARMA")
@@ -420,9 +473,53 @@ export function extractTargetRole(text: string, candidateName?: string | null): 
 }
 
 /**
+ * Extracts skills from explicit sections like "TECHNICAL SKILLS", "SKILLS & TECHNOLOGIES", etc.
+ */
+function extractSkillsFromDedicatedSection(text: string): string[] {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const detectedSkills: string[] = [];
+  let inSkillsSection = false;
+  let linesRead = 0;
+
+  const sectionHeaderRegex = /^(?:technical\s+skills|skills\s*(?:&|and)\s*(?:technologies|tools)|core\s+competencies|key\s+skills|skills\s*[:\-|]|technologies\s*[:\-|]|tools\s*&\s*technologies|technical\s+expertise|skills)$/i;
+  const nextSectionHeaderRegex = /^(?:experience|work\s+experience|professional\s+experience|employment|projects|education|certifications|awards|publications|languages|contact)/i;
+
+  for (const line of lines) {
+    const headerClean = line.replace(/[:\-_]/g, '').trim();
+    if (sectionHeaderRegex.test(headerClean)) {
+      inSkillsSection = true;
+      linesRead = 0;
+      continue;
+    }
+
+    if (inSkillsSection) {
+      if (nextSectionHeaderRegex.test(headerClean) && linesRead > 0) {
+        break;
+      }
+
+      linesRead++;
+      if (linesRead > 12) break;
+
+      // Strip prefixes like "Languages:", "Frontend:", "Databases:", "Tools - "
+      const cleanLine = line.replace(/^[a-zA-Z\s&/]+\s*[:–—\-]\s*/, '');
+      const tokens = cleanLine.split(/[,•·|/]/).map(t => t.trim()).filter(t => t.length >= 2 && t.length <= 30);
+      for (const t of tokens) {
+        const cleanToken = t.replace(/\s*\(.*?\)/g, '').trim();
+        if (cleanToken.length >= 2 && !/^(etc|and|various|experience|proficient|knowledge|familiar)$/i.test(cleanToken)) {
+          detectedSkills.push(cleanToken);
+        }
+      }
+    }
+  }
+
+  return detectedSkills;
+}
+
+/**
  * Extracts skills mentioned in the resume and ranks by frequency
  */
 export function extractSkills(text: string): { all: string[]; primary: string[] } {
+  const sectionSkills = extractSkillsFromDedicatedSection(text);
   const lower = text.toLowerCase();
   const skillCounts: { skill: string; count: number }[] = [];
 
@@ -435,9 +532,19 @@ export function extractSkills(text: string): { all: string[]; primary: string[] 
   }
 
   skillCounts.sort((a, b) => b.count - a.count);
-  const all = skillCounts.map(s => s.skill);
-  const primary = all.slice(0, 5);
+  const poolSkills = skillCounts.map(s => s.skill);
 
+  const seen = new Set<string>();
+  const all: string[] = [];
+  for (const s of [...sectionSkills, ...poolSkills]) {
+    const key = s.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      all.push(s);
+    }
+  }
+
+  const primary = all.slice(0, 5);
   return { all, primary };
 }
 
@@ -447,8 +554,18 @@ export function extractSkills(text: string): { all: string[]; primary: string[] 
 export function extractBackgroundDomain(text: string, role?: string | null, skills?: string[]): string | null {
   const lower = text.toLowerCase();
 
-  if (/(\bdeep learning\b|\bnlp\b|\bllm\b|\bmachine learning\b|\btransformers\b|\bpytorch\b|\btensorflow\b)/i.test(lower)) {
-    return 'AI / Machine Learning';
+  // 1. Direct match for custom phrase "building [something] products"
+  const productMatch = lower.match(/(?:building|shipping|delivering|scaling)\s+([a-z0-9\s-]{3,30}?)\s+(?:products|platforms|applications|systems|tools)/i);
+  if (productMatch && productMatch[1] && !/^(high|good|new|modern|software)$/i.test(productMatch[1].trim())) {
+    const rawDomain = productMatch[1].trim();
+    if (rawDomain.length >= 3 && rawDomain.length <= 25) {
+      return toTitleCase(rawDomain + ' Products & Systems');
+    }
+  }
+
+  // 2. High-signal domain patterns (AI, FinTech, DevOps, etc.)
+  if (/(\bdeep learning\b|\bnlp\b|\bllm\b|\bmachine learning\b|\btransformers\b|\bpytorch\b|\btensorflow\b|\bai\s+powered\b|\bai\s+products?\b|\bgenerative\s+ai\b|\bgenai\b|\bai\s+applications?\b|\bai\s+agents?\b|\bartificial\s+intelligence\b|\bai\b)/i.test(lower)) {
+    return 'AI Powered Products & Engineering';
   }
   if (/(\bfintech\b|\bfinancial\b|\bpayments?\b|\btrading\b|\bbanking\b)/i.test(lower)) {
     return 'FinTech & Distributed Systems';
@@ -475,6 +592,7 @@ export function extractBackgroundDomain(text: string, role?: string | null, skil
     return 'B2B SaaS & Distributed Systems';
   }
 
+  // 3. Fallbacks inferred from role and skills so domain is never blank
   if (role) {
     const lowerRole = role.toLowerCase();
     if (lowerRole.includes('frontend')) return 'Frontend & Web Applications';
@@ -483,6 +601,17 @@ export function extractBackgroundDomain(text: string, role?: string | null, skil
     if (lowerRole.includes('data')) return 'Data & Analytics Systems';
     if (lowerRole.includes('mobile')) return 'Mobile Applications';
     if (lowerRole.includes('cloud') || lowerRole.includes('devops')) return 'Cloud Infrastructure';
+    if (lowerRole.includes('ai') || lowerRole.includes('ml')) return 'AI & Intelligent Systems';
+  }
+
+  if (skills && skills.length > 0) {
+    const sLower = skills.join(' ').toLowerCase();
+    if (sLower.includes('react') || sLower.includes('next.js') || sLower.includes('vue')) {
+      return 'Web Applications & Product Engineering';
+    }
+    if (sLower.includes('python') || sLower.includes('node') || sLower.includes('go') || sLower.includes('java')) {
+      return 'Backend Architecture & APIs';
+    }
   }
 
   return null;
@@ -527,7 +656,7 @@ export async function parseResumeBuffer(
   filename: string
 ): Promise<ExtractedResumeData> {
   const text = await extractTextFromBuffer(buffer, filename);
-  const name = extractCandidateName(text);
+  const name = extractCandidateName(text, filename);
   const targetRole = extractTargetRole(text, name);
   const { all: skills, primary: primarySkills } = extractSkills(text);
   const yearsOfExperience = extractExperienceYears(text);

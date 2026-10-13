@@ -143,13 +143,15 @@ export function WorkflowView({
           if (data.yearsOfExperience !== null && data.yearsOfExperience !== undefined) {
             setExpYearsInput(String(data.yearsOfExperience));
           } else {
-            setExpYearsInput('');
+            setExpYearsInput('1');
           }
           if (data.skills?.length) {
             setSkillsInput(data.skills.join(', '));
           }
           if (data.domain || data.background) {
             setDomainInput(data.domain || data.background);
+          } else if (data.targetRole) {
+            setDomainInput(`${data.targetRole} & Modern Applications`);
           }
         }
       } catch (err) {
@@ -164,12 +166,13 @@ export function WorkflowView({
   const handleConfirmProfile = () => {
     const trimmedName = candidateName.trim();
     const trimmedRole = targetRole.trim();
-    const parsedExp = parseInt(expYearsInput, 10);
+    const rawExp = parseInt(expYearsInput, 10);
+    const parsedExp = isNaN(rawExp) ? 1 : Math.max(0, rawExp);
     const parsedSkills = skillsInput
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const trimmedDomain = domainInput.trim();
+    const effectiveDomain = domainInput.trim() || (trimmedRole ? `${trimmedRole} & Modern Applications` : 'Engineering & Production Systems');
 
     if (!trimmedName || trimmedName === 'Your Name') {
       setConfirmErrorMsg('Your name is required.');
@@ -179,16 +182,8 @@ export function WorkflowView({
       setConfirmErrorMsg('Target role is required.');
       return;
     }
-    if (isNaN(parsedExp) || parsedExp < 0) {
-      setConfirmErrorMsg('Years of experience must be a valid number (0 or higher).');
-      return;
-    }
     if (parsedSkills.length === 0) {
       setConfirmErrorMsg('At least one technical skill is required.');
-      return;
-    }
-    if (!trimmedDomain) {
-      setConfirmErrorMsg('Background or domain is required.');
       return;
     }
     if (workflow === 'agency-leads') {
@@ -208,8 +203,8 @@ export function WorkflowView({
       skills: parsedSkills,
       primarySkills: parsedSkills.slice(0, 5),
       yearsOfExperience: parsedExp,
-      background: trimmedDomain,
-      bioSummary: `${trimmedRole} with ${parsedExp}+ years of experience in ${trimmedDomain}.`,
+      background: effectiveDomain,
+      bioSummary: `${trimmedRole} with ${parsedExp}+ years of experience in ${effectiveDomain}.`,
       relevantExperience: `Building and shipping production systems with ${parsedSkills.slice(0, 3).join(', ')}.`,
       agencyServiceSummary: agencySummaryInput.trim(),
       agencyOffering: agencyOfferingInput.trim()
@@ -384,24 +379,24 @@ export function WorkflowView({
           <div className="flex items-center justify-between border-b border-[#E0DFDC] pb-3">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#0A66C2]">
-                Profile Verification
+                Step 1b • Review Details
               </span>
               <h3 className="text-sm font-bold text-zinc-900 mt-0.5">
-                Confirm Your Details
+                Review & Confirm Parsed Details
               </h3>
               <p className="text-xs text-zinc-500">
-                Messages will be generated strictly using these confirmed details.
+                Auto-extracted from your resume. You can edit any details below, then click Confirm to proceed.
               </p>
             </div>
             {isProfileConfirmed ? (
-              <span className="text-xs font-semibold text-[#057642] bg-[#057642]/10 border border-[#057642]/20 px-3 py-1 rounded-full flex items-center gap-1">
+              <span className="text-xs font-semibold text-[#057642] bg-[#057642]/10 border border-[#057642]/20 px-3 py-1 rounded-full flex items-center gap-1.5 shrink-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#057642]" />
                 <span>Profile Confirmed</span>
               </span>
             ) : (
-              <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Confirmation Required</span>
+              <span className="text-xs font-semibold text-[#0A66C2] bg-[#0A66C2]/10 border border-[#0A66C2]/20 px-3 py-1 rounded-full flex items-center gap-1.5 shrink-0">
+                <Check className="w-3.5 h-3.5 text-[#0A66C2]" />
+                <span>Auto-Filled from Resume</span>
               </span>
             )}
           </div>
@@ -530,14 +525,19 @@ export function WorkflowView({
             )}
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="pt-2 flex items-center justify-between border-t border-zinc-100">
+            <span className="text-[11px] text-zinc-500">
+              {isProfileConfirmed 
+                ? '✓ Profile confirmed. Ready to process connections below.'
+                : 'Click confirm to use these details for your outreach messages.'}
+            </span>
             <button
               type="button"
               onClick={handleConfirmProfile}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-xs shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>Confirm & Save Profile</span>
+              <Check className="w-4 h-4" />
+              <span>{isProfileConfirmed ? 'Update & Re-confirm' : 'Confirm Details & Continue'}</span>
             </button>
           </div>
         </div>
