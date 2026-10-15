@@ -195,6 +195,20 @@ const TECH_SKILLS_POOL = [
 ];
 
 /**
+ * Sanitizes PDF text by removing pagination markers, form feeds, and normalizing whitespace
+ */
+export function cleanPdfExtractedText(rawText: string): string {
+  if (!rawText) return '';
+  return rawText
+    .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, '') // Strip '-- 1 of 2 --'
+    .replace(/\f/g, '\n') // Normalize form feeds
+    .replace(/\r\n/g, '\n') // Normalize Windows line breaks
+    .replace(/[\t ]+/g, ' ') // Collapse multiple spaces on a line
+    .replace(/\n{3,}/g, '\n\n') // Collapse excessive blank lines
+    .trim();
+}
+
+/**
  * Extracts raw text from PDF, DOCX, or TXT file buffers
  */
 export async function extractTextFromBuffer(
@@ -214,12 +228,12 @@ export async function extractTextFromBuffer(
           const parser = new (PDFClass as any)({ data: buffer });
           if (typeof parser.getText === 'function') {
             const data = await parser.getText();
-            return data.text || '';
+            return cleanPdfExtractedText(data.text || '');
           }
         } catch {
           // If callable function
           const data = await (PDFClass as any)(buffer);
-          return data.text || '';
+          return cleanPdfExtractedText(data.text || '');
         }
       }
     } catch (err) {
@@ -230,7 +244,7 @@ export async function extractTextFromBuffer(
     const raw = buffer.toString('latin1');
     const textMatches = raw.match(/\(([^()]{2,})\)\s*Tj/g);
     if (textMatches && textMatches.length > 3) {
-      return textMatches.map(m => m.replace(/^[()]|[()]Tj$/g, '')).join(' ');
+      return cleanPdfExtractedText(textMatches.map(m => m.replace(/^[()]|[()]Tj$/g, '')).join(' '));
     }
     return '';
   }
@@ -469,7 +483,7 @@ export function extractTargetRole(text: string, candidateName?: string | null): 
     }
   }
 
-  return 'Software Engineer';
+  return null;
 }
 
 /**
@@ -590,28 +604,6 @@ export function extractBackgroundDomain(text: string, role?: string | null, skil
   }
   if (/(\bsaas\b|\bb2b\b|\benterprise\b|\bmicroservices\b)/i.test(lower)) {
     return 'B2B SaaS & Distributed Systems';
-  }
-
-  // 3. Fallbacks inferred from role and skills so domain is never blank
-  if (role) {
-    const lowerRole = role.toLowerCase();
-    if (lowerRole.includes('frontend')) return 'Frontend & Web Applications';
-    if (lowerRole.includes('backend')) return 'Backend Architecture & APIs';
-    if (lowerRole.includes('full stack')) return 'Full Stack Product Engineering';
-    if (lowerRole.includes('data')) return 'Data & Analytics Systems';
-    if (lowerRole.includes('mobile')) return 'Mobile Applications';
-    if (lowerRole.includes('cloud') || lowerRole.includes('devops')) return 'Cloud Infrastructure';
-    if (lowerRole.includes('ai') || lowerRole.includes('ml')) return 'AI & Intelligent Systems';
-  }
-
-  if (skills && skills.length > 0) {
-    const sLower = skills.join(' ').toLowerCase();
-    if (sLower.includes('react') || sLower.includes('next.js') || sLower.includes('vue')) {
-      return 'Web Applications & Product Engineering';
-    }
-    if (sLower.includes('python') || sLower.includes('node') || sLower.includes('go') || sLower.includes('java')) {
-      return 'Backend Architecture & APIs';
-    }
   }
 
   return null;

@@ -1,8 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Prospect } from '@/types';
-import { Building2, MapPin, Sparkles } from 'lucide-react';
+import { Building2, MapPin, Sparkles, ExternalLink, Check } from 'lucide-react';
+import { getClientProfile, isProfileComplete, updateClientProspect } from '@/lib/clientStorage';
+import { generatePersonalizedDM } from '@/lib/generator';
+import { copyTextToClipboard, openLinkedInTab } from '@/lib/clipboard';
 
 interface ProspectCardProps {
   prospect: Prospect;
@@ -12,6 +15,7 @@ interface ProspectCardProps {
 export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
   const matchScore = prospect.score?.totalScore || 70;
   const isContacted = prospect.status === 'Contacted';
+  const [quickCopied, setQuickCopied] = useState(false);
 
   const statusColors: Record<string, string> = {
     'Not contacted': 'bg-[#F4F2EE] text-zinc-600 border-[#E0DFDC]',
@@ -24,6 +28,32 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
   };
 
   const statusClass = statusColors[prospect.status] || 'bg-[#F4F2EE] text-zinc-600 border-[#E0DFDC]';
+
+  const handleQuickCopyAndOpen = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const prof = getClientProfile();
+    if (!prof || !isProfileComplete(prof, 'job-hunt')) {
+      onSelect(prospect);
+      return;
+    }
+
+    const targetRole =
+      prospect.jobOpportunity?.title && prospect.jobOpportunity.title !== prospect.jobTitle
+        ? prospect.jobOpportunity.title
+        : prof.targetRole || prof.targetRoles?.[0] || 'Software Engineer';
+
+    try {
+      const generated = generatePersonalizedDM(prospect, targetRole, 'standard', prof, 'job-hunt');
+      const msg = generated.day0;
+      openLinkedInTab(prospect.linkedinUrl, prospect.name, prospect.company);
+      await copyTextToClipboard(msg);
+      setQuickCopied(true);
+      setTimeout(() => setQuickCopied(false), 2500);
+      updateClientProspect(prospect.id, prospect.status, msg);
+    } catch {
+      onSelect(prospect);
+    }
+  };
 
   return (
     <div
@@ -81,16 +111,36 @@ export function ProspectCard({ prospect, onSelect }: ProspectCardProps) {
           {prospect.status}
         </span>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(prospect);
-          }}
-          className="text-xs text-[#0A66C2] hover:bg-[#0A66C2]/10 border border-[#0A66C2]/30 px-3 py-1.5 rounded-full font-semibold flex items-center gap-1 transition-colors"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-[#0A66C2]" />
-          <span>{isContacted ? 'View Outreach' : 'Generate DM'}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleQuickCopyAndOpen}
+            title="1-Click: Copy personalized message & open LinkedIn profile"
+            className="text-xs bg-[#0A66C2] hover:bg-[#004182] text-white px-3 py-1.5 rounded-full font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+          >
+            {quickCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-white" />
+                <span>Copied & Opened!</span>
+              </>
+            ) : (
+              <>
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Copy & Open</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(prospect);
+            }}
+            title="Review full sequence and customization"
+            className="text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 px-2.5 py-1.5 rounded-full font-medium transition-colors cursor-pointer"
+          >
+            {isContacted ? 'Outreach' : 'Review'}
+          </button>
+        </div>
       </div>
     </div>
   );

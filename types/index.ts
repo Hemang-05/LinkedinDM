@@ -32,7 +32,19 @@ export type PersonaType =
   | 'employee'
   | 'cto_lead'
   | 'freelancer'
-  | 'other';
+  | 'other'
+  | 'excluded';
+
+export type ProspectCategory =
+  | 'recruiter'
+  | 'employee'
+  | 'founder'
+  | 'cto'
+  | 'eng_leader'
+  | 'other'
+  | 'excluded';
+
+export type NotRelevantReason = 'wrong_company' | 'wrong_role' | 'not_hiring' | 'other';
 
 export type OutreachStatus =
   | 'Not contacted'
@@ -45,7 +57,8 @@ export type OutreachStatus =
   | 'Rejected'
   | 'No response'
   | 'Follow-up due'
-  | 'Closed';
+  | 'Closed'
+  | 'not_relevant';
 
 export interface ScoreBreakdownItem {
   category: string;
@@ -111,6 +124,8 @@ export interface Prospect {
   
   // Outreach State
   status: OutreachStatus;
+  category?: ProspectCategory;
+  notRelevantReason?: NotRelevantReason;
   draftedMessage?: string;
   followUpDay5Message?: string;
   followUpDay12Message?: string;
@@ -129,6 +144,7 @@ export interface OutreachLogEntry {
   relationshipType: RelationshipType;
   linkedinUrl: string;
   status: OutreachStatus;
+  notes?: string;
   rawText?: string;
 }
 
@@ -145,6 +161,8 @@ export interface UserProfile {
   targetRole?: string;
   location?: string;
   workPreference?: 'Remote' | 'Hybrid' | 'On-site' | 'Any';
+  locationPreference?: 'remote' | 'country_city' | 'any';
+  preferredLocation?: string;
   background?: string;
   startupExperienceSummary?: string;
   relevantExperience?: string;

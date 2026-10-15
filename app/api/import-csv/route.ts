@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { classifyProspectTitle, isStudentOrIntern, ClassificationResult } from '@/lib/classifier';
+import { classifyProspectTitle, isStudentOrIntern, ClassificationResult, classifyTitle } from '@/lib/classifier';
 import { calculateScoreAndMatching } from '@/lib/scoring';
 import { parseResumeBuffer } from '@/lib/resumeParser';
 import { Prospect, ScoreExplanation } from '@/types';
@@ -136,6 +136,7 @@ export async function POST(request: Request) {
         notes,
         classification: cls.classification,
         relationshipType: cls.relationshipType,
+        category: classifyTitle(jobTitle),
         status: 'Not contacted',
         createdAt: now,
         updatedAt: now,

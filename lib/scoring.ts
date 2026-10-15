@@ -103,29 +103,58 @@ export function calculateScoreAndMatching(
       : 'General engineering stack overlap'
   });
 
-  // 3. Remote India Eligibility (+20 points)
-  const isRemoteIndia =
+  // 3. Location Alignment (+20 points)
+  const locPref = userProfile?.locationPreference || 'any';
+  const prefLoc = (userProfile?.preferredLocation || '').trim().toLowerCase();
+  let locPoints = 15;
+  let locReason = 'Flexible location compatibility';
+
+  const isRemoteEligible =
     locationText.includes('remote') ||
-    locationText.includes('india') ||
     locationText.includes('anywhere') ||
     locationText.includes('worldwide') ||
-    effectiveJob?.remoteStatus === 'Remote India' ||
-    effectiveJob?.remoteStatus === 'Remote Worldwide';
+    effectiveJob?.remoteStatus === 'Remote Worldwide' ||
+    Boolean(effectiveJob?.remoteStatus?.toLowerCase().includes('remote'));
 
-  const isHardUSBlocker =
-    (locationText.includes('us only') || locationText.includes('us citizen') || locationText.includes('on-site new york') || locationText.includes('on-site sf')) &&
-    !isRemoteIndia;
-
-  if (isHardUSBlocker) {
-    blockers.push('Strict non-India location requirement detected');
+  if (locPref === 'remote') {
+    if (isRemoteEligible) {
+      locPoints = 20;
+      locReason = 'Matches remote-only preference';
+    } else if (locationText.includes('hybrid')) {
+      locPoints = 10;
+      locReason = 'Hybrid role; remote flexibility required';
+    } else if (locationText.includes('on-site') || locationText.includes('onsite')) {
+      locPoints = 5;
+      locReason = 'Strict on-site role conflicts with remote-only preference';
+      blockers.push('Strict on-site requirement conflicts with remote-only preference');
+    } else {
+      locPoints = 15;
+      locReason = 'Location flexibility to be confirmed';
+    }
+  } else if (locPref === 'country_city' && prefLoc) {
+    if (locationText.includes(prefLoc)) {
+      locPoints = 20;
+      locReason = `Matches preferred location: "${userProfile?.preferredLocation}"`;
+    } else if (isRemoteEligible) {
+      locPoints = 15;
+      locReason = `Remote position compatible with "${userProfile?.preferredLocation}"`;
+    } else {
+      locPoints = 5;
+      locReason = `Location "${effectiveJob?.location || prospect.location || 'Unknown'}" differs from preferred "${userProfile?.preferredLocation}"`;
+      gaps.push(`Location outside preferred target (${userProfile?.preferredLocation})`);
+    }
+  } else {
+    // 'any' location preference
+    locPoints = isRemoteEligible ? 20 : 18;
+    locReason = isRemoteEligible ? 'Remote / worldwide location alignment' : 'General location alignment';
   }
 
   items.push({
-    category: 'Remote India',
-    points: isRemoteIndia ? 20 : 5,
+    category: 'Location Alignment',
+    points: locPoints,
     maxPoints: 20,
-    matched: isRemoteIndia,
-    reason: isRemoteIndia ? 'Remote India or Worldwide eligible' : 'Location flexibility needs verification'
+    matched: locPoints >= 10,
+    reason: locReason
   });
 
   // 4. Experience Match (+15 points)

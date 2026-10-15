@@ -49,3 +49,17 @@ export function openLinkedInTab(linkedinUrl?: string, name?: string, company?: s
 
   window.open(targetUrl, '_blank', 'noopener,noreferrer');
 }
+
+/**
+ * 1-Click Action: Synchronously opens LinkedIn profile tab and copies text to clipboard
+ */
+export async function copyAndOpenLinkedIn(
+  text: string,
+  linkedinUrl?: string,
+  name?: string,
+  company?: string
+): Promise<boolean> {
+  openLinkedInTab(linkedinUrl, name, company);
+  return await copyTextToClipboard(text);
+}
+

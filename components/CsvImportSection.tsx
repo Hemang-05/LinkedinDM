@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle2, Download, HelpCircle, ArrowRight } from 'lucide-react';
 import { Prospect } from '@/types';
+import { requestStoragePersistence } from '@/lib/clientStorage';
 
 interface CsvImportSectionProps {
   onImportComplete: (imported: Prospect[]) => void;
@@ -46,6 +47,7 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
       const data = await res.json();
       if (data.success) {
         setSuccessCount(data.count);
+        requestStoragePersistence();
         onImportComplete(data.prospects);
       } else {
         setErrorMsg(data.error || 'Failed to process CSV file');

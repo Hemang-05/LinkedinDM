@@ -290,6 +290,24 @@ export function validateMessageQuality(
         });
       }
     }
+    if (context.persona === 'cto_lead') {
+      if (lower.includes('referral') || lower.includes('refer me')) {
+        issues.push({
+          rule: 'cto-lead-referral-ask',
+          severity: 'error',
+          message: 'Do not ask CTOs or engineering leaders for referrals; ask directly about engineering opportunities on their team.'
+        });
+      }
+    }
+    if (context.persona === 'other') {
+      if (lower.includes('referral') || lower.includes('refer me') || lower.includes('fellow engineer')) {
+        issues.push({
+          rule: 'other-referral-ask',
+          severity: 'error',
+          message: 'Do not ask other contacts for referrals or assume they are engineering peers.'
+        });
+      }
+    }
   }
 
   const hasErrors = issues.some((i) => i.severity === 'error');
@@ -508,7 +526,71 @@ Best,
 ${senderName}`;
   }
 
-  // D. EMPLOYEE / PEER ENGINEER (Referral & Direction Ask)
+  // D. OTHER / NEUTRAL (Neutral Inquiry - no referral ask, no peer assumption)
+  if (persona === 'other') {
+    const compRef = hasSpecificCompany ? ` at ${companyName}` : '';
+
+    if (angle === 'founding') {
+      return `Hi ${firstName},
+
+I came across your profile while exploring the team${compRef}.
+
+I'm a ${targetRole} with ${expClause} in ${domain}, specializing in early-stage 0 to 1 product development across ${shortStack}.
+
+I'm currently exploring new engineering opportunities and wanted to ask: is your team or company exploring additions on the technical side?
+
+Would be glad to share more details or connect if that might be relevant.
+
+Best,
+${senderName}`;
+    }
+
+    if (angle === 'ai_rag') {
+      return `Hi ${firstName},
+
+I came across your profile while researching ${hasSpecificCompany ? companyName : 'your company'}.
+
+I'm a ${targetRole} with ${expClause} building production software across ${primaryStack} in ${domain}.
+
+I'm currently exploring new opportunities and wanted to see if there might be interest in adding technical talent with this stack to the team.
+
+Happy to connect and share more context if helpful.
+
+Best,
+${senderName}`;
+    }
+
+    if (angle === 'product_ownership') {
+      return `Hi ${firstName},
+
+I came across your profile while looking into ${hasSpecificCompany ? companyName : 'your team'}.
+
+I'm a ${targetRole} with ${expClause} in ${domain}, focused on end-to-end product engineering across ${shortStack}.
+
+I'm currently exploring new roles and wanted to inquire if there are any upcoming technical needs or engineering openings.
+
+Would be glad to connect if that aligns with any current team initiatives.
+
+Best,
+${senderName}`;
+    }
+
+    // Standard Neutral
+    return `Hi ${firstName},
+
+I came across your profile while looking into ${hasSpecificCompany ? companyName : 'your organization'}.
+
+I'm a ${targetRole} with ${expClause} in ${domain}, working across ${primaryStack}.
+
+I'm currently exploring new engineering opportunities and wanted to see if your team or company has any open technical roles that might be a fit.
+
+Glad to share my background if there's any interest in connecting.
+
+Best,
+${senderName}`;
+  }
+
+  // E. EMPLOYEE / PEER ENGINEER (Referral & Direction Ask)
   const compRef = hasSpecificCompany ? ` at ${companyName}` : '';
 
   if (angle === 'founding') {
@@ -857,6 +939,17 @@ Best,
 ${senderName}`;
   }
 
+  if (persona === 'other') {
+    return `Hi ${firstName},
+
+Following up briefly on my note above.
+
+If your team or company has any upcoming engineering needs, I'd be glad to share my profile and connect.
+
+Best,
+${senderName}`;
+  }
+
   // Employee
   return `Hi ${firstName},
 
@@ -942,6 +1035,17 @@ Best,
 ${senderName}`;
   }
 
+  if (persona === 'other') {
+    return `Hi ${firstName},
+
+Last follow-up from my side. Understand things might be busy or timing might not align right now.
+
+Wishing you and ${hasSpecificCompany ? companyName : 'your team'} all the best, and happy to stay connected for the future!
+
+Best,
+${senderName}`;
+  }
+
   // Employee
   return `Hi ${firstName},
 
@@ -986,11 +1090,15 @@ export function generatePersonalizedDM(
   const companyInfo = sanitizeCompanyName(prospect.company);
   const senderName = profile.name.trim();
   const expYears = profile.yearsOfExperience;
-  const expText = (expYears !== undefined && expYears !== null) ? `${expYears}+ years` : '';
-  const expClause = (expYears !== undefined && expYears !== null) ? `${expYears}+ years of experience` : 'experience';
+  const hasYears = expYears !== undefined && expYears !== null && expYears > 0;
+  const expText = hasYears ? `${expYears}+ years` : '';
+  const expClause = hasYears ? `${expYears}+ years of experience` : 'experience';
   const skills = formatConciseSkills(profile);
   const targetRole = resolveTargetRole(profile, jobOrRole, prospect.jobTitle);
   const persona: PersonaType = overridePersona || resolveProspectPersona(prospect);
+  if (persona === 'excluded' || prospect.category === 'excluded') {
+    throw new Error('Prospect category is excluded from message generation');
+  }
   const goal: OutreachGoal = outreachGoal || 'job-hunt';
   const domain = profile.background?.trim() || '';
   const agencySummary = profile.agencyServiceSummary?.trim() || '';

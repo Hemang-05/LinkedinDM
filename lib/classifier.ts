@@ -1,4 +1,11 @@
-import { Prospect, ProspectClassification, RelationshipType, SegregationGroup, PersonaType } from '@/types';
+import {
+  ProspectCategory,
+  Prospect,
+  PersonaType,
+  ProspectClassification,
+  RelationshipType,
+  SegregationGroup
+} from '@/types';
 
 export type ClassificationResult = {
   classification: ProspectClassification;
@@ -7,150 +14,282 @@ export type ClassificationResult = {
   priorityScore: number;
 };
 
-// Precompiled once at module load (instead of many .includes() calls per row)
-const COFOUNDER_RE = /co-?founder/;
-const FOUNDER_RE = /founder|proprietor|(?<!product )\bowner\b/;
-const PARTNER_RE = /\bpartner\b/;
-const CEO_RE = /\bceo\b|chief executive/;
-const CXO_RE = /\bcto\b|chief technology|chief technical|\bc[a-z]o\b/;
-const RECRUITER_RE =
-  /recruit|talent acquisition|talent partner|sourcer|human resources|\bhr\b|people ops|people partner/;
-const ENG_MANAGER_RE =
-  /engineering manager|\bem\b|vp,? (of )?engineering|head of engineering|director of engineering|lead engineer|tech lead/;
-const HIRING_MANAGER_RE = /hiring manager|hiring lead/;
-const FREELANCER_RE =
-  /\b(freelanc|freelancer|contractor|consultant|independent (engineer|developer|contractor|consultant)|fractional|interim)\b/;
-const PEER_RE =
-  /engineer|developer|full stack|frontend|backend|architect|product manager|designer|analyst|specialist/;
+/**
+ * WHOLE-WORD REGEX PATTERNS
+ * Note: Word boundary \b ensures that short acronyms like 'hr' or 'ta'
+ * never match substrings within words (e.g. 'Chrome' or 'Shreya' or 'Data').
+ */
 
-// Interns, students and freshers: they can't hire or refer, so they're excluded at import
-const STUDENT_RE =
-  /\b(intern|interns|internship|student|undergrad|undergraduate|fresher|trainee|apprentice|aspiring|b\.?\s?tech|m\.?\s?tech|bachelor'?s?|mba candidate|phd (student|candidate|scholar)|research scholar|campus ambassador|class of 20\d\d)\b/;
-// Real seniority overrides the student match (e.g. "Founder | B.Tech student", "Student Success Manager"),
-// as do university staff roles that serve students rather than being students.
-const SENIOR_OVERRIDE_RE =
-  /founder|\bceo\b|\bcto\b|director|head of|\bvp\b|manager|\blead\b|student (success|placement|affairs|services|support)/;
+// 1. Excluded: student, intern, trainee, apprentice (whole-word match; do not match "fellow" alone)
+const EXCLUDED_REGEX = /\b(students?|interns?|internships?|trainees?|apprentices?)\b/i;
 
-export function isStudentOrIntern(title: string, headline?: string): boolean {
-  const text = `${title} ${headline || ''}`.toLowerCase();
-  return STUDENT_RE.test(text) && !SENIOR_OVERRIDE_RE.test(text);
+// 2. Founder: founder, co-founder, CEO, owner, managing director
+const FOUNDER_REGEX = /\b(co-?founders?|founders?|ceo|chief\s+executive\s+officer|owners?|managing\s+director)\b/i;
+
+// 3. CTO: CTO, chief technology officer, VP engineering, head of engineering
+const CTO_REGEX = /\b(cto|chief\s+technology\s+officer|vp\s+(?:of\s+)?engineering|vice\s+president\s+(?:of\s+)?engineering|head\s+of\s+engineering)\b/i;
+
+// 4. Engineering Leader: tech lead, team lead, engineering manager, director of engineering
+const ENG_LEADER_REGEX = /\b(tech(?:nical)?\s+lead|team\s+lead|engineering\s+manager|director\s+of\s+engineering)\b/i;
+
+// 5. Recruiter: recruiter, talent acquisition, TA, HR, people ops, sourcer, headhunter
+// Whole-word \bhr\b and \bta\b prevent partial matches
+const RECRUITER_REGEX = /\b(recruiters?|recruiting|recruitment|talent\s+acquisition|\bta\b|\bhr\b|human\s+resources|people\s+ops|people\s+operations|sourcers?|sourcing|headhunters?)\b/i;
+
+// 6. Employee: any hands-on role (engineer, developer, SDE, full stack, etc.) from junior to senior/staff/principal
+const EMPLOYEE_REGEX = /\b(engineers?|engineering|developers?|sde(?:\s+[i|v|x\d]+)?|swe|full\s*stack|frontend|front-end|backend|back-end|programmers?|architects?|data\s+scientists?|data\s+analysts?|qa|sdet|systems?\s+engineer|devops|sre|cloud\s+engineer|mobile\s+engineer|ios\s+developer|android\s+developer)\b/i;
+
+/**
+ * Classifies a professional title into one of seven strict categories.
+ * Enforces strict precedence:
+ *   excluded -> founder -> cto -> eng_leader -> recruiter -> employee -> other
+ */
+export function classifyTitle(title: string | null | undefined): ProspectCategory {
+  if (!title || typeof title !== 'string') return 'other';
+  const trimmed = title.trim();
+  if (!trimmed) return 'other';
+
+  // Precedence 1: excluded
+  if (EXCLUDED_REGEX.test(trimmed)) {
+    return 'excluded';
+  }
+
+  // Precedence 2: founder
+  if (FOUNDER_REGEX.test(trimmed)) {
+    return 'founder';
+  }
+
+  // Precedence 3: cto
+  if (CTO_REGEX.test(trimmed)) {
+    return 'cto';
+  }
+
+  // Precedence 4: eng_leader
+  if (ENG_LEADER_REGEX.test(trimmed)) {
+    return 'eng_leader';
+  }
+
+  // Precedence 5: recruiter ("Senior Technical Recruiter" resolves to recruiter)
+  if (RECRUITER_REGEX.test(trimmed)) {
+    return 'recruiter';
+  }
+
+  // Precedence 6: employee
+  if (EMPLOYEE_REGEX.test(trimmed)) {
+    return 'employee';
+  }
+
+  // Precedence 7: other (never drop unmatched titles)
+  return 'other';
 }
 
-export function classifyProspectTitle(title: string, headline?: string): ClassificationResult {
-  const text = `${title} ${headline || ''}`.toLowerCase();
-  const isRecruiter = RECRUITER_RE.test(text);
+/**
+ * Category metadata for UI styling, badges, and filters.
+ */
+export const CATEGORY_METADATA: Record<
+  ProspectCategory,
+  { label: string; badgeColor: string; description: string }
+> = {
+  founder: {
+    label: 'Founder / Exec',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    description: 'Founders, Co-founders, CEOs, Owners, Managing Directors'
+  },
+  cto: {
+    label: 'CTO / VP Eng',
+    badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    description: 'CTOs, VPs of Engineering, Heads of Engineering'
+  },
+  eng_leader: {
+    label: 'Eng Leader',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    description: 'Engineering Managers, Tech Leads, Team Leads, Directors'
+  },
+  recruiter: {
+    label: 'Recruiter / Talent',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+    description: 'Technical Recruiters, Talent Acquisition, HR, People Ops'
+  },
+  employee: {
+    label: 'Engineer / Builder',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    description: 'Hands-on Software Engineers, Developers, SDEs, Architects'
+  },
+  other: {
+    label: 'Other Roles',
+    badgeColor: 'bg-zinc-100 text-zinc-600 border-zinc-200',
+    description: 'Product Managers, Sales, Marketing, Designers, Operations'
+  },
+  excluded: {
+    label: 'Excluded',
+    badgeColor: 'bg-red-50 text-red-600 border-red-200',
+    description: 'Students, Interns, Trainees, Apprentices'
+  }
+};
 
-  if (COFOUNDER_RE.test(text)) {
-    return { classification: 'Co-founder', relationshipType: 'Co-founder', segregationGroup: 'Founder', priorityScore: 10 };
+/**
+ * Clean hook for an optional future AI classification step.
+ * Takes a deduped list of unclassified ('other') titles and returns enriched mappings.
+ */
+export type AIClassifierHook = (
+  unclassifiedTitles: string[]
+) => Promise<Record<string, ProspectCategory>>;
+
+/**
+ * Classifies a batch of titles, with an optional pluggable AI fallback
+ * for any titles that remain in the 'other' category.
+ */
+export async function classifyBatchWithOptionalAI(
+  titles: string[],
+  aiHook?: AIClassifierHook
+): Promise<Record<string, ProspectCategory>> {
+  const results: Record<string, ProspectCategory> = {};
+  const unclassified: string[] = [];
+
+  for (const t of titles) {
+    const category = classifyTitle(t);
+    results[t] = category;
+    if (category === 'other') {
+      unclassified.push(t);
+    }
   }
 
-  // "Partner" only counts as a founder when it isn't an HR/talent partner
-  if (FOUNDER_RE.test(text) || (PARTNER_RE.test(text) && !isRecruiter)) {
-    return { classification: 'Founder', relationshipType: 'Founder', segregationGroup: 'Founder', priorityScore: 10 };
+  // If a pluggable AI hook is supplied and we have unclassified titles, invoke it
+  if (aiHook && unclassified.length > 0) {
+    const uniqueUnclassified = Array.from(new Set(unclassified));
+    try {
+      const aiEnrichments = await aiHook(uniqueUnclassified);
+      for (const [title, cat] of Object.entries(aiEnrichments)) {
+        if (results[title] === 'other' && cat !== 'other') {
+          results[title] = cat;
+        }
+      }
+    } catch (err) {
+      console.warn('Optional AI classification hook encountered an error; falling back to heuristic tags:', err);
+    }
   }
 
-  if (CEO_RE.test(text)) {
-    return { classification: 'CEO', relationshipType: 'CEO', segregationGroup: 'Founder', priorityScore: 10 };
-  }
-
-  if (CXO_RE.test(text)) {
-    return { classification: 'CTO', relationshipType: 'CTO', segregationGroup: 'Founder', priorityScore: 10 };
-  }
-
-  if (isRecruiter) {
-    return { classification: 'Recruiter', relationshipType: 'Recruiter', segregationGroup: 'HR', priorityScore: 8 };
-  }
-
-  if (ENG_MANAGER_RE.test(text)) {
-    return { classification: 'Engineering Manager', relationshipType: 'Engineering Manager', segregationGroup: 'Employee', priorityScore: 9 };
-  }
-
-  if (HIRING_MANAGER_RE.test(text)) {
-    return { classification: 'Hiring Manager', relationshipType: 'Hiring Manager', segregationGroup: 'HR', priorityScore: 9 };
-  }
-
-  if (FREELANCER_RE.test(text)) {
-    return { classification: 'Freelancer', relationshipType: 'Freelancer', segregationGroup: 'Employee', priorityScore: 6 };
-  }
-
-  if (PEER_RE.test(text)) {
-    return { classification: 'Other', relationshipType: 'Peer', segregationGroup: 'Employee', priorityScore: 5 };
-  }
-
-  return { classification: 'Other', relationshipType: 'Other', segregationGroup: 'Employee', priorityScore: 3 };
+  return results;
 }
 
 /**
  * Resolves the explicit outreach persona from prospect fields and titles.
+ * Backward compatible with existing sequence generators and review modals.
  */
 export function resolveProspectPersona(prospect: Partial<Prospect>): PersonaType {
   if (prospect.persona) return prospect.persona;
 
+  if (prospect.category) {
+    switch (prospect.category) {
+      case 'founder':
+        return 'founder';
+      case 'cto':
+      case 'eng_leader':
+        return 'cto_lead';
+      case 'recruiter':
+        return 'recruiter';
+      case 'employee':
+        return 'employee';
+      case 'other':
+        return 'other';
+      case 'excluded':
+        return 'excluded';
+      default:
+        break;
+    }
+  }
+
   const classification = (prospect.classification || '').toLowerCase();
   const relationship = (prospect.relationshipType || '').toLowerCase();
-  const group = (prospect.segregationGroup || '').toLowerCase();
   const text = `${prospect.jobTitle || ''} ${prospect.headline || ''} ${prospect.notes || ''}`.toLowerCase();
 
-  // 1. Founder / Co-Founder / CEO / Owner
+  if (
+    classification === 'freelancer' ||
+    classification === 'contractor' ||
+    relationship === 'freelancer' ||
+    relationship === 'consultant' ||
+    /\b(freelance|freelancer|contractor|consultant)\b/i.test(text)
+  ) {
+    return 'freelancer';
+  }
+
+  const cat = classifyTitle(prospect.jobTitle || prospect.classification || prospect.headline);
+  if (cat === 'excluded') return 'excluded';
+  if (cat === 'founder') return 'founder';
+  if (cat === 'cto' || cat === 'eng_leader') return 'cto_lead';
+  if (cat === 'recruiter') return 'recruiter';
+  if (cat === 'employee') return 'employee';
+
   if (
     classification === 'founder' ||
     classification === 'co-founder' ||
     classification === 'ceo' ||
     relationship === 'founder' ||
     relationship === 'co-founder' ||
-    relationship === 'ceo' ||
-    COFOUNDER_RE.test(text) ||
-    FOUNDER_RE.test(text) ||
-    CEO_RE.test(text)
+    relationship === 'ceo'
   ) {
     return 'founder';
   }
 
-  // 2. CTO / VP Engineering / Engineering Manager / Tech Lead (High-value Technical Decision Maker)
   if (
     classification === 'cto' ||
     classification === 'engineering manager' ||
     relationship === 'cto' ||
-    relationship === 'engineering manager' ||
-    CXO_RE.test(text) ||
-    ENG_MANAGER_RE.test(text)
+    relationship === 'engineering manager'
   ) {
     return 'cto_lead';
   }
 
-  // 3. Recruiter / HR / Talent Acquisition
   if (
     classification === 'recruiter' ||
     classification === 'hiring manager' ||
     relationship === 'recruiter' ||
     relationship === 'hr' ||
-    relationship === 'hiring manager' ||
-    group === 'hr' ||
-    RECRUITER_RE.test(text) ||
-    HIRING_MANAGER_RE.test(text)
+    relationship === 'hiring manager'
   ) {
     return 'recruiter';
   }
 
-  // 4. Freelancer / Contractor / Consultant
-  if (
-    classification === 'freelancer' ||
-    classification === 'contractor' ||
-    relationship === 'freelancer' ||
-    relationship === 'consultant' ||
-    FREELANCER_RE.test(text)
-  ) {
-    return 'freelancer';
+  if (cat === 'other') return 'other';
+
+  return 'other';
+}
+
+/**
+ * Checks if a title represents an excluded student/intern/trainee/apprentice role.
+ * Whole-word match; does not match 'fellow' alone.
+ */
+export function isStudentOrIntern(title: string, headline?: string): boolean {
+  if (classifyTitle(title) === 'excluded') return true;
+  if (headline && classifyTitle(headline) === 'excluded') return true;
+  return false;
+}
+
+/**
+ * Backward compatibility helper for legacy CSV import and scoring endpoints.
+ */
+export function classifyProspectTitle(title: string, headline?: string): ClassificationResult {
+  const cat = classifyTitle(title);
+  if (cat === 'founder') {
+    return { classification: 'Founder', relationshipType: 'Founder', segregationGroup: 'Founder', priorityScore: 10 };
+  }
+  if (cat === 'cto') {
+    return { classification: 'CTO', relationshipType: 'CTO', segregationGroup: 'Founder', priorityScore: 10 };
+  }
+  if (cat === 'eng_leader') {
+    return { classification: 'Engineering Manager', relationshipType: 'Engineering Manager', segregationGroup: 'Employee', priorityScore: 9 };
+  }
+  if (cat === 'recruiter') {
+    return { classification: 'Recruiter', relationshipType: 'Recruiter', segregationGroup: 'HR', priorityScore: 8 };
+  }
+  if (cat === 'employee') {
+    return { classification: 'Other', relationshipType: 'Peer', segregationGroup: 'Employee', priorityScore: 5 };
   }
 
-  // 5. Engineering Employee / Peer
-  if (
-    relationship === 'peer' ||
-    group === 'employee' ||
-    PEER_RE.test(text)
-  ) {
-    return 'employee';
+  const text = `${title} ${headline || ''}`.toLowerCase();
+  if (/\b(freelance|freelancer|contractor|consultant)\b/i.test(text)) {
+    return { classification: 'Freelancer', relationshipType: 'Freelancer', segregationGroup: 'Employee', priorityScore: 6 };
   }
 
-  return 'employee';
+  return { classification: 'Other', relationshipType: 'Other', segregationGroup: 'Employee', priorityScore: 3 };
 }

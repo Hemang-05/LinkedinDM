@@ -20,7 +20,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Prospect, UserProfile } from '@/types';
-import { getClientProfile, saveClientProfile, isProfileComplete } from '@/lib/clientStorage';
+import { getClientProfile, saveClientProfile, isProfileComplete, requestStoragePersistence } from '@/lib/clientStorage';
 import { EMPTY_PROFILE } from '@/lib/profile';
 
 export type WorkflowType = 'job-hunt' | 'agency-leads' | 'hire' | 'freelancers';
@@ -55,6 +55,10 @@ export function WorkflowView({
   const [domainInput, setDomainInput] = useState(existingProf?.background || '');
   const [agencySummaryInput, setAgencySummaryInput] = useState(existingProf?.agencyServiceSummary || '');
   const [agencyOfferingInput, setAgencyOfferingInput] = useState(existingProf?.agencyOffering || '');
+  const [locationPreference, setLocationPreference] = useState<'any' | 'remote' | 'country_city'>(
+    existingProf?.locationPreference || 'any'
+  );
+  const [preferredLocation, setPreferredLocation] = useState(existingProf?.preferredLocation || '');
 
   // Status flags
   const [isParsingResume, setIsParsingResume] = useState(false);
@@ -138,21 +142,19 @@ export function WorkflowView({
         if (data.success) {
           setResumeParsed(true);
 
-          if (data.name) setCandidateName(data.name);
-          if (data.targetRole) setTargetRole(data.targetRole);
+          setCandidateName(data.name || '');
+          setTargetRole(data.targetRole || '');
           if (data.yearsOfExperience !== null && data.yearsOfExperience !== undefined) {
             setExpYearsInput(String(data.yearsOfExperience));
           } else {
-            setExpYearsInput('1');
+            setExpYearsInput('');
           }
           if (data.skills?.length) {
             setSkillsInput(data.skills.join(', '));
+          } else {
+            setSkillsInput('');
           }
-          if (data.domain || data.background) {
-            setDomainInput(data.domain || data.background);
-          } else if (data.targetRole) {
-            setDomainInput(`${data.targetRole} & Modern Applications`);
-          }
+          setDomainInput(data.domain || data.background || '');
         }
       } catch (err) {
         console.error('Failed to parse resume:', err);
@@ -167,12 +169,12 @@ export function WorkflowView({
     const trimmedName = candidateName.trim();
     const trimmedRole = targetRole.trim();
     const rawExp = parseInt(expYearsInput, 10);
-    const parsedExp = isNaN(rawExp) ? 1 : Math.max(0, rawExp);
+    const parsedExp = isNaN(rawExp) ? undefined : rawExp;
     const parsedSkills = skillsInput
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const effectiveDomain = domainInput.trim() || (trimmedRole ? `${trimmedRole} & Modern Applications` : 'Engineering & Production Systems');
+    const trimmedDomain = domainInput.trim();
 
     if (!trimmedName || trimmedName === 'Your Name') {
       setConfirmErrorMsg('Your name is required.');
@@ -182,8 +184,16 @@ export function WorkflowView({
       setConfirmErrorMsg('Target role is required.');
       return;
     }
+    if (parsedExp === undefined || parsedExp < 0) {
+      setConfirmErrorMsg('Years of experience is required (0 or higher).');
+      return;
+    }
     if (parsedSkills.length === 0) {
       setConfirmErrorMsg('At least one technical skill is required.');
+      return;
+    }
+    if (!trimmedDomain) {
+      setConfirmErrorMsg('Background or domain is required.');
       return;
     }
     if (workflow === 'agency-leads') {
@@ -199,12 +209,14 @@ export function WorkflowView({
       title: trimmedRole,
       targetRole: trimmedRole,
       targetRoles: [trimmedRole],
-      targetLocations: ['Remote'],
+      targetLocations: preferredLocation.trim() ? [preferredLocation.trim()] : ['Remote'],
+      locationPreference,
+      preferredLocation: preferredLocation.trim(),
       skills: parsedSkills,
       primarySkills: parsedSkills.slice(0, 5),
       yearsOfExperience: parsedExp,
-      background: effectiveDomain,
-      bioSummary: `${trimmedRole} with ${parsedExp}+ years of experience in ${effectiveDomain}.`,
+      background: trimmedDomain,
+      bioSummary: `${trimmedRole} with ${parsedExp}+ years of experience in ${trimmedDomain}.`,
       relevantExperience: `Building and shipping production systems with ${parsedSkills.slice(0, 3).join(', ')}.`,
       agencyServiceSummary: agencySummaryInput.trim(),
       agencyOffering: agencyOfferingInput.trim()
@@ -255,6 +267,8 @@ export function WorkflowView({
       if (data.success) {
         setSuccessCount(data.count);
         setSkippedStudents(data.skippedStudents || 0);
+        // Call navigator.storage.persist() after the first import
+        requestStoragePersistence();
         setTimeout(() => {
           onImportComplete(data.prospects);
         }, 500);
@@ -364,6 +378,12 @@ export function WorkflowView({
               />
             </label>
 
+            {/* AI Provider Privacy Note */}
+            <p className="text-[11px] text-zinc-500 flex items-center gap-1.5 pt-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <span>Your resume is processed by an AI provider (Groq) to fill your profile. It is not stored on our servers.</span>
+            </p>
+
             {/* Resume Parsing Indicator */}
             {isParsingResume && (
               <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center gap-2.5 text-xs text-[#0A66C2] animate-pulse">
@@ -409,9 +429,16 @@ export function WorkflowView({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="block text-zinc-700 font-semibold mb-1">
-                Full Name <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-700 font-semibold">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                {!candidateName.trim() && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Not found, please add
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={candidateName}
@@ -419,15 +446,24 @@ export function WorkflowView({
                   setCandidateName(e.target.value);
                   setIsProfileConfirmed(false);
                 }}
-                placeholder="e.g. Alex Johnson"
-                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                placeholder={!candidateName.trim() ? "Not found, please add" : "e.g. Alex Johnson"}
+                className={`w-full bg-[#F4F2EE]/40 border rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] ${
+                  !candidateName.trim() ? 'border-amber-300' : 'border-[#E0DFDC]'
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-zinc-700 font-semibold mb-1">
-                Target Role / Title <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-700 font-semibold">
+                  Target Role / Title <span className="text-red-500">*</span>
+                </label>
+                {!targetRole.trim() && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Not found, please add
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={targetRole}
@@ -435,15 +471,24 @@ export function WorkflowView({
                   setTargetRole(e.target.value);
                   setIsProfileConfirmed(false);
                 }}
-                placeholder="e.g. Senior Software Engineer"
-                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                placeholder={!targetRole.trim() ? "Not found, please add" : "e.g. Senior Software Engineer"}
+                className={`w-full bg-[#F4F2EE]/40 border rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] ${
+                  !targetRole.trim() ? 'border-amber-300' : 'border-[#E0DFDC]'
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-zinc-700 font-semibold mb-1">
-                Years of Experience <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-700 font-semibold">
+                  Years of Experience <span className="text-red-500">*</span>
+                </label>
+                {!expYearsInput.trim() && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Not found, please add
+                  </span>
+                )}
+              </div>
               <input
                 type="number"
                 min="0"
@@ -452,15 +497,24 @@ export function WorkflowView({
                   setExpYearsInput(e.target.value);
                   setIsProfileConfirmed(false);
                 }}
-                placeholder="e.g. 4"
-                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                placeholder={!expYearsInput.trim() ? "Not found, please add" : "e.g. 4"}
+                className={`w-full bg-[#F4F2EE]/40 border rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] ${
+                  !expYearsInput.trim() ? 'border-amber-300' : 'border-[#E0DFDC]'
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-zinc-700 font-semibold mb-1">
-                Background / Domain <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-700 font-semibold">
+                  Background / Domain <span className="text-red-500">*</span>
+                </label>
+                {!domainInput.trim() && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Not found, please add
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={domainInput}
@@ -468,15 +522,24 @@ export function WorkflowView({
                   setDomainInput(e.target.value);
                   setIsProfileConfirmed(false);
                 }}
-                placeholder="e.g. B2B SaaS & Distributed Systems"
-                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                placeholder={!domainInput.trim() ? "Not found, please add" : "e.g. B2B SaaS & Distributed Systems"}
+                className={`w-full bg-[#F4F2EE]/40 border rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] ${
+                  !domainInput.trim() ? 'border-amber-300' : 'border-[#E0DFDC]'
+                }`}
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-zinc-700 font-semibold mb-1">
-                Technical Skills (comma-separated) <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-700 font-semibold">
+                  Technical Skills (comma-separated) <span className="text-red-500">*</span>
+                </label>
+                {!skillsInput.trim() && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Not found, please add
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={skillsInput}
@@ -484,9 +547,75 @@ export function WorkflowView({
                   setSkillsInput(e.target.value);
                   setIsProfileConfirmed(false);
                 }}
-                placeholder="e.g. React, Next.js, TypeScript, Node.js, GraphQL"
-                className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                placeholder={!skillsInput.trim() ? "Not found, please add" : "e.g. React, Next.js, TypeScript, Node.js, GraphQL"}
+                className={`w-full bg-[#F4F2EE]/40 border rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2] ${
+                  !skillsInput.trim() ? 'border-amber-300' : 'border-[#E0DFDC]'
+                }`}
               />
+            </div>
+
+            {/* Part 3: Optional Location Preference */}
+            <div className="sm:col-span-2 pt-2 border-t border-zinc-100 space-y-2">
+              <label className="block text-zinc-700 font-semibold">
+                Location Preference (Optional)
+              </label>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreference('any');
+                    setIsProfileConfirmed(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                    locationPreference === 'any'
+                      ? 'bg-[#0A66C2] text-white border-[#0A66C2]'
+                      : 'bg-[#F4F2EE]/60 text-zinc-700 border-[#E0DFDC] hover:border-zinc-400'
+                  }`}
+                >
+                  Any / Worldwide
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreference('remote');
+                    setIsProfileConfirmed(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                    locationPreference === 'remote'
+                      ? 'bg-[#0A66C2] text-white border-[#0A66C2]'
+                      : 'bg-[#F4F2EE]/60 text-zinc-700 border-[#E0DFDC] hover:border-zinc-400'
+                  }`}
+                >
+                  Remote Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocationPreference('country_city');
+                    setIsProfileConfirmed(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                    locationPreference === 'country_city'
+                      ? 'bg-[#0A66C2] text-white border-[#0A66C2]'
+                      : 'bg-[#F4F2EE]/60 text-zinc-700 border-[#E0DFDC] hover:border-zinc-400'
+                  }`}
+                >
+                  Specific Country / City
+                </button>
+              </div>
+
+              {locationPreference === 'country_city' && (
+                <input
+                  type="text"
+                  value={preferredLocation}
+                  onChange={(e) => {
+                    setPreferredLocation(e.target.value);
+                    setIsProfileConfirmed(false);
+                  }}
+                  placeholder="e.g. India, San Francisco, London"
+                  className="w-full bg-[#F4F2EE]/40 border border-[#E0DFDC] rounded-xl px-3 py-2 text-zinc-900 text-xs font-medium focus:outline-none focus:border-[#0A66C2] focus:ring-1 focus:ring-[#0A66C2]"
+                />
+              )}
             </div>
 
             {workflow === 'agency-leads' && (

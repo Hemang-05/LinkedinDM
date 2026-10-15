@@ -372,18 +372,6 @@ export function DMReviewModal({
     appendClientOutreachLog(logEntry);
     updateClientProspect(prospect.id, 'Contacted', message);
 
-    try {
-      await fetch('/api/outreach-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'append',
-          prospectId: prospect.id,
-          ...logEntry
-        })
-      });
-    } catch {}
-
     setShowConfirmModal(false);
     setShowReturnPrompt(false);
     setLogSuccess(true);

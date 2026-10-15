@@ -11,7 +11,13 @@ import {
   updateClientOutreachStatus,
   downloadOutreachLogFile,
   getClientProfile,
-  saveClientProfile
+  saveClientProfile,
+  requestStoragePersistence,
+  getLastExportedDate,
+  recordExportDate,
+  getClientSession,
+  saveClientSession,
+  clearClientSession
 } from '@/lib/clientStorage';
 import { EMPTY_PROFILE } from '@/lib/profile';
 import { Header } from '@/components/Header';
@@ -25,6 +31,7 @@ import { CsvImportSection } from '@/components/CsvImportSection';
 import { LinkedInCsvGuideModal } from '@/components/LinkedInCsvGuideModal';
 import { WorkflowView, WorkflowType } from '@/components/WorkflowView';
 import { SegregatedConnectionsView } from '@/components/SegregatedConnectionsView';
+import { ReviewQueueView } from '@/components/ReviewQueueView';
 import {
   Sparkles,
   Zap,
@@ -39,13 +46,19 @@ import {
   UserCheck,
   Laptop,
   Edit3,
-  Check
+  Check,
+  ShieldAlert,
+  X,
+  Upload,
+  Loader2,
+  Layers
 } from 'lucide-react';
 
 export default function Home() {
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowType | null>(null);
   const [workflowStep, setWorkflowStep] = useState<'upload' | 'segregated'>('upload');
+  const [prospectsViewMode, setProspectsViewMode] = useState<'queue' | 'grid'>('queue');
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +71,8 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState('');
   const [editTargetRole, setEditTargetRole] = useState('');
   const [editSkills, setEditSkills] = useState('');
+  const [isParsingSettingsResume, setIsParsingSettingsResume] = useState(false);
+  const [settingsResumeFeedback, setSettingsResumeFeedback] = useState<string | null>(null);
 
   // Modals
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
@@ -71,8 +86,13 @@ export default function Home() {
   // Filters for Outreach tab
   const [outreachFilter, setOutreachFilter] = useState<string>('All');
 
+  // Backup reminder state
+  const [lastExportDate, setLastExportDate] = useState<string | null>(null);
+  const [showBackupReminder, setShowBackupReminder] = useState<boolean>(true);
+
   // Load browser storage on client mount with automatic deduplication
   useEffect(() => {
+    setLastExportDate(getLastExportedDate());
     const localP = getClientProspects();
     const seen = new Set<string>();
     const cleaned: Prospect[] = [];
@@ -106,7 +126,38 @@ export default function Home() {
       setEditTargetRole(localProf.targetRole || localProf.targetRoles?.[0] || '');
       setEditSkills(localProf.skills?.join(', ') || '');
     }
+
+    // Restore Session & Active Workspace across reloads
+    const session = getClientSession();
+    if (cleaned.length > 0) {
+      // User already has imported connections: restore directly into their active workspace
+      const restoredWorkflow = (session?.selectedWorkflow as WorkflowType) || 'job-hunt';
+      setSelectedWorkflow(restoredWorkflow);
+      setWorkflowStep('segregated');
+      if (session?.currentTab) {
+        setCurrentTab(session.currentTab as NavTab);
+      }
+      if (session?.prospectsViewMode) {
+        setProspectsViewMode(session.prospectsViewMode);
+      }
+    } else if (session?.selectedWorkflow) {
+      setSelectedWorkflow(session.selectedWorkflow as WorkflowType);
+      setWorkflowStep(session.workflowStep || 'upload');
+      if (session?.currentTab) {
+        setCurrentTab(session.currentTab as NavTab);
+      }
+    }
   }, []);
+
+  // Persist session state to localStorage whenever navigation or workflow changes
+  useEffect(() => {
+    saveClientSession({
+      selectedWorkflow,
+      workflowStep,
+      currentTab,
+      prospectsViewMode
+    });
+  }, [selectedWorkflow, workflowStep, currentTab, prospectsViewMode]);
 
   const handleSaveProfile = () => {
     const updatedSkills = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
@@ -121,6 +172,63 @@ export default function Home() {
     setUserProfile(updated);
     saveClientProfile(updated);
     setIsEditingProfile(false);
+  };
+
+  const handleSettingsResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingSettingsResume(true);
+    setSettingsResumeFeedback(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/parse-resume', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const skillsArray = Array.isArray(data.skills) ? data.skills : [];
+        const skillsString = skillsArray.join(', ');
+        const name = data.name || '';
+        const role = data.targetRole || '';
+        const title = data.targetRole || '';
+        const years = data.yearsOfExperience ?? null;
+        const domain = data.domain || data.background || '';
+
+        setEditName(name);
+        setEditTitle(title);
+        setEditTargetRole(role);
+        setEditSkills(skillsString);
+        setIsEditingProfile(true);
+
+        const updated: UserProfile = {
+          ...(userProfile || EMPTY_PROFILE),
+          name,
+          title,
+          targetRole: role,
+          targetRoles: role ? [role] : (userProfile?.targetRoles || []),
+          skills: skillsArray,
+          yearsOfExperience: years !== null && years !== undefined ? Number(years) : undefined,
+          background: domain || undefined,
+          bioSummary: data.bioSummary || undefined,
+          relevantExperience: data.relevantExperience || undefined
+        };
+        setUserProfile(updated);
+        saveClientProfile(updated);
+        setSettingsResumeFeedback('Resume parsed with AI! Details auto-filled and saved below.');
+      } else {
+        setSettingsResumeFeedback(`Failed: ${data.error || 'Could not parse resume'}`);
+      }
+    } catch (err: any) {
+      setSettingsResumeFeedback('Error uploading or parsing resume');
+    } finally {
+      setIsParsingSettingsResume(false);
+    }
   };
 
   const handleProspectUpdated = (updated: Prospect) => {
@@ -146,6 +254,27 @@ export default function Home() {
     setSelectedProspect(newP);
   };
 
+  const handleExportBackup = async () => {
+    try {
+      const { exportUserDataJson, recordExportDate } = await import('@/lib/clientDb');
+      const json = await exportUserDataJson();
+      const nowIso = recordExportDate();
+      setLastExportDate(nowIso);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `directmessage_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export backup error:', err);
+      alert('Failed to export backup data.');
+    }
+  };
+
   const handleCsvImportComplete = (imported: Prospect[]) => {
     const seen = new Set<string>();
     const cleaned: Prospect[] = [];
@@ -160,6 +289,7 @@ export default function Home() {
     }
     setProspects(cleaned);
     saveClientProspects(cleaned);
+    requestStoragePersistence();
     setCurrentTab('prospects');
   };
 
@@ -178,6 +308,7 @@ export default function Home() {
     }
     setProspects(cleaned);
     saveClientProspects(cleaned);
+    requestStoragePersistence();
     setWorkflowStep('segregated');
   };
 
@@ -197,19 +328,6 @@ export default function Home() {
     });
     setProspects(updatedProspects);
     saveClientProspects(updatedProspects);
-
-    try {
-      await fetch('/api/outreach-log', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          linkedinUrl: entry.linkedinUrl,
-          name: entry.name,
-          company: entry.company,
-          status: newStatus
-        })
-      });
-    } catch {}
   };
 
   const scrollToCsvUpload = (catKey?: string) => {
@@ -317,10 +435,14 @@ export default function Home() {
       {/* Clean Header */}
       <Header
         currentTab={currentTab}
+        activeWorkflow={selectedWorkflow}
         onTabChange={(tab) => {
+          setCurrentTab(tab);
+        }}
+        onChangeGoal={() => {
           setSelectedWorkflow(null);
           setWorkflowStep('upload');
-          setCurrentTab(tab);
+          setCurrentTab('home');
         }}
         onBackToLanding={() => {
           setSelectedWorkflow(null);
@@ -330,6 +452,42 @@ export default function Home() {
       />
 
       <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col relative pb-20 md:pb-8 px-4 sm:px-6 lg:px-8 pt-6">
+        {/* Back up your data Reminder */}
+        {showBackupReminder && prospects.length > 0 && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+                <ShieldAlert className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="font-semibold text-amber-950">Back up your data: </span>
+                <span>
+                  All prospects are stored locally in this browser. Last exported:{' '}
+                  <strong className="text-amber-950 font-semibold">
+                    {lastExportDate ? new Date(lastExportDate).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                  </strong>.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleExportBackup}
+                className="text-[11px] font-semibold bg-[#0A66C2] hover:bg-[#004182] text-white px-3 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3 h-3" />
+                <span>Export Backup</span>
+              </button>
+              <button
+                onClick={() => setShowBackupReminder(false)}
+                className="text-zinc-400 hover:text-zinc-600 p-1 rounded-md cursor-pointer"
+                title="Dismiss reminder"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <main className="flex-1 space-y-6">
           {/* TAB 1: HOME LANDING & WORKFLOWS */}
           {currentTab === 'home' && (
@@ -385,7 +543,7 @@ export default function Home() {
                           key={tile.id}
                           onClick={() => {
                             setSelectedWorkflow(tile.id);
-                            setWorkflowStep('upload');
+                            setWorkflowStep(prospects.length > 0 ? 'segregated' : 'upload');
                           }}
                           className="touch-card bg-white border border-[#E0DFDC] hover:border-[#0A66C2] rounded-xl p-6 shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between group transition-all"
                         >
@@ -425,62 +583,126 @@ export default function Home() {
           {currentTab === 'prospects' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[#E0DFDC] rounded-xl p-4 shadow-xs">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
-                  <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Role:</span>
-                  {['All', 'Founder', 'CEO', 'CTO', 'Engineering Manager', 'Recruiter'].map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => setClassificationFilter(role)}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                        classificationFilter === role
-                          ? 'bg-[#0A66C2] text-white shadow-xs'
-                          : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
-                      }`}
-                    >
-                      {role}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
-                  <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Status:</span>
-                  {['All', 'Not contacted', 'Contacted', 'Replied'].map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setProspectFilter(st)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                        prospectFilter === st
-                          ? 'bg-[#0A66C2] text-white shadow-xs'
-                          : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="text-xs text-zinc-500 flex items-center justify-between px-1">
-                <span>Showing <strong className="text-zinc-900">{filteredProspects.length}</strong> prospects</span>
-                <span>Sorted by Match %</span>
-              </div>
-
-              {filteredProspects.length === 0 ? (
-                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-sm space-y-2">
-                  <p className="font-bold text-zinc-900 text-sm">No prospects in your list yet</p>
-                  <p className="text-xs text-zinc-500">
-                    Upload your LinkedIn Connections CSV file on the Home tab to import your contacts.
+                <div>
+                  <h2 className="text-base font-bold text-zinc-900 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#0A66C2]" />
+                    <span>Prospects & Outreach Review</span>
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    {prospects.length} total imported connections · {prospects.filter((p) => p.status !== 'Contacted' && p.status !== 'not_relevant').length} pending outreach
                   </p>
                 </div>
+
+                {/* View Switcher: ⚡ Direct Message Review Queue vs ▦ Grid View */}
+                {prospects.length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-[#F4F2EE] p-1 rounded-xl text-xs font-semibold self-start sm:self-auto">
+                    <button
+                      onClick={() => setProspectsViewMode('queue')}
+                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                        prospectsViewMode === 'queue'
+                          ? 'bg-[#0A66C2] text-white shadow-xs font-bold'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Review Queue</span>
+                    </button>
+
+                    <button
+                      onClick={() => setProspectsViewMode('grid')}
+                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                        prospectsViewMode === 'grid'
+                          ? 'bg-white text-zinc-900 shadow-xs font-bold'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Grid View</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {prospects.length === 0 ? (
+                <div className="bg-white border border-[#E0DFDC] rounded-2xl p-10 text-center text-xs sm:text-sm text-zinc-500 shadow-xs space-y-3 max-w-lg mx-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-[#EBF3FB] text-[#0A66C2] flex items-center justify-center mx-auto">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-zinc-900 text-base">No prospects imported yet</p>
+                  <p className="text-xs text-zinc-500">
+                    Upload your LinkedIn Connections CSV file on the Home tab to start reviewing and generating direct messages.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setCurrentTab('home');
+                    }}
+                    className="inline-flex items-center gap-2 bg-[#0A66C2] hover:bg-[#004182] text-white font-bold text-xs px-4 py-2.5 rounded-full shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Choose Outreach Goal & Import</span>
+                  </button>
+                </div>
+              ) : prospectsViewMode === 'queue' ? (
+                /* REVIEW QUEUE (1-BY-1 HIGH-SPEED TRIAGE) */
+                <ReviewQueueView
+                  prospects={prospects}
+                  workflow={(selectedWorkflow || 'job-hunt') as any}
+                  onProspectUpdated={handleProspectUpdated}
+                  onSwitchToList={() => setProspectsViewMode('grid')}
+                />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-7">
-                  {filteredProspects.map((prospect) => (
-                    <ProspectCard
-                      key={prospect.id}
-                      prospect={prospect}
-                      onSelect={(p) => setSelectedProspect(p)}
-                    />
-                  ))}
+                /* GRID VIEW */
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-[#E0DFDC] rounded-xl p-4 shadow-xs">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
+                      <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Role:</span>
+                      {['All', 'Founder', 'CEO', 'CTO', 'Engineering Manager', 'Recruiter'].map((role) => (
+                        <button
+                          key={role}
+                          onClick={() => setClassificationFilter(role)}
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                            classificationFilter === role
+                              ? 'bg-[#0A66C2] text-white shadow-xs'
+                              : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
+                          }`}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
+                      <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Status:</span>
+                      {['All', 'Not contacted', 'Contacted', 'Replied'].map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => setProspectFilter(st)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                            prospectFilter === st
+                              ? 'bg-[#0A66C2] text-white shadow-xs'
+                              : 'bg-white text-zinc-600 hover:text-zinc-900 border border-[#E0DFDC]'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-zinc-500 flex items-center justify-between px-1">
+                    <span>Showing <strong className="text-zinc-900">{filteredProspects.length}</strong> prospects</span>
+                    <span>Sorted by Match %</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-7">
+                    {filteredProspects.map((prospect) => (
+                      <ProspectCard
+                        key={prospect.id}
+                        prospect={prospect}
+                        onSelect={(p) => setSelectedProspect(p)}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -659,6 +881,52 @@ export default function Home() {
                         </>
                       )}
                     </button>
+                  </div>
+
+                  {/* AI Resume Upload & Auto-fill */}
+                  <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/50 border border-blue-200/70 rounded-xl p-3.5 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#0A66C2] shrink-0" />
+                        <div>
+                          <span className="text-xs font-bold text-zinc-900 block">
+                            Auto-Fill Profile with AI
+                          </span>
+                          <span className="text-[11px] text-zinc-500">
+                            Upload resume (.pdf, .docx, .txt) to extract profile data via Groq LLM
+                          </span>
+                        </div>
+                      </div>
+
+                      <label className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#0A66C2] hover:bg-[#004182] text-white flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-colors shrink-0">
+                        {isParsingSettingsResume ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Parsing AI...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload Resume</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.txt"
+                          onChange={handleSettingsResumeUpload}
+                          disabled={isParsingSettingsResume}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {settingsResumeFeedback && (
+                      <p className={`text-xs font-medium pt-1 ${
+                        settingsResumeFeedback.startsWith('Resume') ? 'text-emerald-700' : 'text-rose-600'
+                      }`}>
+                        {settingsResumeFeedback}
+                      </p>
+                    )}
                   </div>
 
                   {isEditingProfile ? (

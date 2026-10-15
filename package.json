@@ -11,14 +11,18 @@
   },
   "dependencies": {
     "@types/pdf-parse": "^1.1.5",
+    "@types/react-window": "^1.8.8",
     "clsx": "^2.1.1",
+    "groq-sdk": "^1.6.0",
     "lucide-react": "^0.447.0",
     "mammoth": "^1.13.0",
     "next": "^14.2.15",
     "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.2"
+    "react-window": "^1.8.10",
+    "tailwind-merge": "^2.5.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20.16.10",

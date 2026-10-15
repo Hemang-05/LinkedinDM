@@ -1,4 +1,4 @@
-import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile, OutreachGoal } from '@/types';
+import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile, OutreachGoal, NotRelevantReason } from '@/types';
 import { INITIAL_PROSPECTS } from './sampleData';
 import { EMPTY_PROFILE } from './profile';
 
@@ -24,6 +24,11 @@ export function saveClientProspects(prospects: Prospect[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(PROSPECTS_STORAGE_KEY, JSON.stringify(prospects));
+    import('./clientDb')
+      .then(({ saveProspects }) => {
+        saveProspects(prospects);
+      })
+      .catch(() => {});
   } catch (err) {
     console.error('Failed to save prospects to localStorage:', err);
   }
@@ -32,7 +37,8 @@ export function saveClientProspects(prospects: Prospect[]): void {
 export function updateClientProspect(
   id: string,
   newStatus: OutreachStatus,
-  updatedMessage?: string
+  updatedMessage?: string,
+  notRelevantReason?: NotRelevantReason
 ): Prospect | null {
   const list = getClientProspects();
   const idx = list.findIndex((p) => p.id === id);
@@ -41,6 +47,9 @@ export function updateClientProspect(
   const now = new Date().toISOString();
   list[idx].status = newStatus;
   list[idx].updatedAt = now;
+  if (notRelevantReason !== undefined) {
+    list[idx].notRelevantReason = notRelevantReason;
+  }
   if (updatedMessage !== undefined) {
     list[idx].draftedMessage = updatedMessage;
   }
@@ -49,6 +58,15 @@ export function updateClientProspect(
   }
 
   saveClientProspects(list);
+
+  if (typeof window !== 'undefined') {
+    import('./clientDb')
+      .then(({ updateProspectStatusInDb }) => {
+        updateProspectStatusInDb(id, newStatus, updatedMessage);
+      })
+      .catch(() => {});
+  }
+
   return list[idx];
 }
 
@@ -234,4 +252,51 @@ export function downloadOutreachLogFile(): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+export {
+  requestStoragePersistence,
+  getLastExportedDate,
+  recordExportDate
+} from './clientDb';
+
+export interface ClientSession {
+  selectedWorkflow: OutreachGoal | null;
+  workflowStep: 'upload' | 'segregated';
+  currentTab?: string;
+  prospectsViewMode?: 'queue' | 'grid';
+}
+
+const SESSION_STORAGE_KEY = 'directmessage_ui_session_v1';
+
+export function getClientSession(): ClientSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function saveClientSession(session: Partial<ClientSession>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = getClientSession() || {
+      selectedWorkflow: null,
+      workflowStep: 'upload'
+    };
+    const updated = { ...existing, ...session };
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.error('Failed to save session to localStorage:', err);
+  }
+}
+
+export function clearClientSession(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {}
 }
