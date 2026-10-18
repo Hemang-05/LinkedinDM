@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   CalendarClock,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Send,
+  RotateCw
 } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -33,13 +35,41 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [verificationNotice, setVerificationNotice] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
+  const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const configured = isSupabaseConfigured();
+
+  const handleResendVerification = async () => {
+    if (!pendingVerificationEmail) return;
+    setIsResending(true);
+    setResendStatus(null);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase client unavailable');
+      const { error } = await client.auth.resend({
+        type: 'signup',
+        email: pendingVerificationEmail,
+        options: {
+          emailRedirectTo: `${getSiteUrl()}`
+        }
+      });
+      if (error) throw error;
+      setResendStatus({ type: 'success', message: 'Verification link resent! Please check your inbox and spam folder.' });
+    } catch (err: any) {
+      setResendStatus({ type: 'error', message: err.message || 'Could not resend verification email.' });
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+    setResendStatus(null);
 
     if (!configured) {
       console.warn('[Auth] Supabase credentials not found in environment.');
@@ -85,17 +115,16 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           return;
         }
 
-        if (data.user) {
-          setSuccessMsg('Account created successfully!');
+        // If data.session exists, user is immediately confirmed and signed in!
+        if (data.session && data.user) {
+          setSuccessMsg('Account created! Entering workspace...');
           setActiveStorageUser(data.user.id);
 
-          // 1. Create Supabase profile for this UUID (Requirement 3)
           await ensureSupabaseProfile(data.user.id, data.user.email, {
             name: fullName.trim(),
             targetRole: targetRole.trim() || 'Full Stack Engineer'
           });
 
-          // 2. Migrate legacy local prospects only once if present
           const legacy = getLegacyUnmigratedProspects();
           if (legacy.length > 0) {
             await migrateLocalDataToSupabase(data.user.id, legacy);
@@ -104,8 +133,42 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
           setTimeout(() => {
             onAuthSuccess(data.user);
-          }, 600);
+          }, 500);
+          return;
         }
+
+        // If no session returned, try immediate password login in case auto-confirmed
+        const loginAttempt = await client.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim()
+        });
+
+        if (loginAttempt.data?.session && loginAttempt.data?.user) {
+          setSuccessMsg('Account created! Entering workspace...');
+          setActiveStorageUser(loginAttempt.data.user.id);
+
+          await ensureSupabaseProfile(loginAttempt.data.user.id, loginAttempt.data.user.email, {
+            name: fullName.trim(),
+            targetRole: targetRole.trim() || 'Full Stack Engineer'
+          });
+
+          const legacy = getLegacyUnmigratedProspects();
+          if (legacy.length > 0) {
+            await migrateLocalDataToSupabase(loginAttempt.data.user.id, legacy);
+            clearLegacyStorage();
+          }
+
+          setTimeout(() => {
+            onAuthSuccess(loginAttempt.data.user);
+          }, 500);
+          return;
+        }
+
+        // If email confirmation is required by Supabase, present the clear verification UI
+        setPendingVerificationEmail(email.trim());
+        setVerificationNotice(true);
+        setLoading(false);
+        return;
       } else {
         const { data, error } = await client.auth.signInWithPassword({
           email: email.trim(),
@@ -113,19 +176,23 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         });
 
         if (error) {
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            setPendingVerificationEmail(email.trim());
+            setVerificationNotice(true);
+            setLoading(false);
+            return;
+          }
           setErrorMsg(error.message);
           setLoading(false);
           return;
         }
 
         if (data.user) {
-          setSuccessMsg('Signed in successfully!');
+          setSuccessMsg('Signed in successfully! Loading workspace...');
           setActiveStorageUser(data.user.id);
 
-          // Ensure profile exists for this UUID
           await ensureSupabaseProfile(data.user.id, data.user.email);
 
-          // Migrate legacy unassigned data only once if present
           const legacy = getLegacyUnmigratedProspects();
           if (legacy.length > 0) {
             await migrateLocalDataToSupabase(data.user.id, legacy);
@@ -160,70 +227,168 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-[#E0DFDC] rounded-2xl sm:px-10">
-          {/* Mode Switcher Tabs */}
-          <div className="flex border-b border-zinc-200 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setErrorMsg('');
-                setSuccessMsg('');
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                mode === 'signin'
-                  ? 'border-[#0A66C2] text-[#0A66C2]'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup');
-                setErrorMsg('');
-                setSuccessMsg('');
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                mode === 'signup'
-                  ? 'border-[#0A66C2] text-[#0A66C2]'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {verificationNotice ? (
+            <div className="text-center py-2 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 bg-blue-50 text-[#0A66C2] rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50">
+                <Mail className="w-7 h-7 animate-pulse" />
+              </div>
 
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900">Verify your email address</h2>
+                <p className="text-xs text-zinc-600 mt-2 leading-relaxed px-2">
+                  We sent a confirmation link to{' '}
+                  <span className="font-semibold text-zinc-900">{pendingVerificationEmail}</span>.
+                  Please check your inbox (and spam folder) and click the link to activate your workspace.
+                </p>
+              </div>
 
-          {errorMsg && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-              <span>{errorMsg}</span>
+              {resendStatus && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center justify-center gap-2 ${
+                    resendStatus.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
+                >
+                  {resendStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                  )}
+                  <span>{resendStatus.message}</span>
+                </div>
+              )}
+
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  disabled={isResending}
+                  onClick={handleResendVerification}
+                  className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isResending ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-zinc-600" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Resend Verification Link</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVerificationNotice(false);
+                    setMode('signin');
+                    setEmail(pendingVerificationEmail);
+                    setErrorMsg('');
+                    setSuccessMsg('Email confirmed? Sign in below:');
+                  }}
+                  className="w-full py-2 px-4 text-[#0A66C2] hover:text-[#004182] text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Already verified? Proceed to Sign In →
+                </button>
+              </div>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Mode Switcher Tabs */}
+              <div className="flex border-b border-zinc-200 mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signin');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                  className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
+                    mode === 'signin'
+                      ? 'border-[#0A66C2] text-[#0A66C2]'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                  className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
+                    mode === 'signup'
+                      ? 'border-[#0A66C2] text-[#0A66C2]'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
 
-          {successMsg && (
-            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span>{successMsg}</span>
-            </div>
-          )}
+              {errorMsg && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
-              <>
+              {successMsg && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === 'signup' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                        Full Name *
+                      </label>
+                      <div className="relative">
+                        <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                        <input
+                          type="text"
+                          required
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Hemang Mehta"
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                        Primary Target Role
+                      </label>
+                      <div className="relative">
+                        <Briefcase className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                        <input
+                          type="text"
+                          value={targetRole}
+                          onChange={(e) => setTargetRole(e.target.value)}
+                          placeholder="Full Stack Engineer"
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                    Full Name *
+                    Email Address *
                   </label>
                   <div className="relative">
-                    <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                    <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
                     <input
-                      type="text"
+                      type="email"
                       required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Hemang Mehta"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@example.com"
                       className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
                     />
                   </div>
@@ -231,73 +396,40 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
                 <div>
                   <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                    Primary Target Role
+                    Password *
                   </label>
                   <div className="relative">
-                    <Briefcase className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                    <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
                     <input
-                      type="text"
-                      value={targetRole}
-                      onChange={(e) => setTargetRole(e.target.value)}
-                      placeholder="Full Stack Engineer"
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
                       className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
                     />
                   </div>
+                  {mode === 'signup' && (
+                    <p className="text-[11px] text-zinc-400 mt-1">Must be at least 6 characters</p>
+                  )}
                 </div>
-              </>
-            )}
 
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                Email Address *
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                Password *
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                />
-              </div>
-              {mode === 'signup' && (
-                <p className="text-[11px] text-zinc-400 mt-1">Must be at least 6 characters</p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-sm rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ArrowRight className="w-4 h-4" />
-              )}
-              <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Account & Continue'}</span>
-            </button>
-          </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-sm rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4" />
+                  )}
+                  <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Account & Continue'}</span>
+                </button>
+              </form>
+            </>
+          )}
 
           {/* Security Features Info Box */}
           <div className="mt-6 pt-5 border-t border-zinc-100 text-[11px] text-zinc-500 space-y-2">
