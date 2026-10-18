@@ -1,7 +1,14 @@
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 
-export const getSupabaseUrl = (): string => process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-export const getSupabaseAnonKey = (): string => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const DEFAULT_SUPABASE_URL = 'https://oshymujvzarneiersmck.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zaHltdWp2emFybmVpZXJzbWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTczNDIsImV4cCI6MjEwNzc5MzM0Mn0.pEjmoPYcXADLzIc4_S7-yncEb96xBOJXJn0leCQtApY';
+
+export const getSupabaseUrl = (): string =>
+  process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+
+export const getSupabaseAnonKey = (): string =>
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = (): boolean => {
   const url = getSupabaseUrl();
