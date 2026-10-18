@@ -35,7 +35,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [verificationNotice, setVerificationNotice] = useState(false);
+  const [isEmailVerificationPending, setIsEmailVerificationPending] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -164,9 +164,13 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           return;
         }
 
-        // If email confirmation is required by Supabase, present the clear verification UI
+        // If email confirmation is required by Supabase:
+        // Automatically switch to Sign In with credentials intact!
+        setMode('signin');
+        setIsEmailVerificationPending(true);
         setPendingVerificationEmail(email.trim());
-        setVerificationNotice(true);
+        setErrorMsg('');
+        setSuccessMsg('');
         setLoading(false);
         return;
       } else {
@@ -177,8 +181,9 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
         if (error) {
           if (error.message.toLowerCase().includes('email not confirmed')) {
+            setIsEmailVerificationPending(true);
             setPendingVerificationEmail(email.trim());
-            setVerificationNotice(true);
+            setErrorMsg('');
             setLoading(false);
             return;
           }
@@ -227,209 +232,233 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-[#E0DFDC] rounded-2xl sm:px-10">
-          {verificationNotice ? (
-            <div className="text-center py-2 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-              <div className="w-14 h-14 bg-blue-50 text-[#0A66C2] rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50">
-                <Mail className="w-7 h-7 animate-pulse" />
-              </div>
+          {/* Mode Switcher Tabs */}
+          <div className="flex border-b border-zinc-200 mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
+                mode === 'signin'
+                  ? 'border-[#0A66C2] text-[#0A66C2]'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signup');
+                setErrorMsg('');
+                setSuccessMsg('');
+                setIsEmailVerificationPending(false);
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
+                mode === 'signup'
+                  ? 'border-[#0A66C2] text-[#0A66C2]'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
 
-              <div>
-                <h2 className="text-lg font-bold text-zinc-900">Verify your email address</h2>
-                <p className="text-xs text-zinc-600 mt-2 leading-relaxed px-2">
-                  We sent a confirmation link to{' '}
-                  <span className="font-semibold text-zinc-900">{pendingVerificationEmail}</span>.
-                  Please check your inbox (and spam folder) and click the link to activate your workspace.
-                </p>
-              </div>
-
-              {resendStatus && (
-                <div
-                  className={`p-3 rounded-xl text-xs flex items-center justify-center gap-2 ${
-                    resendStatus.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}
-                >
-                  {resendStatus.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  )}
-                  <span>{resendStatus.message}</span>
+          {/* Verification email sent message on top */}
+          {isEmailVerificationPending && (
+            <div className="mb-5 p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl text-blue-950 text-xs space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-start gap-2.5">
+                <Mail className="w-4 h-4 text-[#0A66C2] shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-900">Verification link sent to your email!</p>
+                  <p className="text-blue-800/90 text-[11px] mt-0.5 leading-relaxed">
+                    We sent a confirmation link to <span className="font-semibold text-blue-950">{pendingVerificationEmail || email}</span>.
+                    Please check your inbox (and spam folder) and confirm your email.
+                  </p>
                 </div>
-              )}
+              </div>
 
-              <div className="pt-2 space-y-2">
+              <div className="flex items-center justify-between pt-1.5 border-t border-blue-100 text-[11px]">
                 <button
                   type="button"
                   disabled={isResending}
                   onClick={handleResendVerification}
-                  className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="text-[#0A66C2] hover:underline font-semibold cursor-pointer disabled:opacity-50 flex items-center gap-1"
                 >
-                  {isResending ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-zinc-600" />
-                  ) : (
-                    <Send className="w-3.5 h-3.5" />
-                  )}
-                  <span>Resend Verification Link</span>
+                  {isResending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  <span>Resend verification email</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setVerificationNotice(false);
-                    setMode('signin');
-                    setEmail(pendingVerificationEmail);
-                    setErrorMsg('');
-                    setSuccessMsg('Email confirmed? Sign in below:');
-                  }}
-                  className="w-full py-2 px-4 text-[#0A66C2] hover:text-[#004182] text-xs font-semibold cursor-pointer transition-colors"
+                  onClick={() => setIsEmailVerificationPending(false)}
+                  className="text-zinc-600 hover:text-zinc-900 font-medium cursor-pointer"
                 >
-                  Already verified? Proceed to Sign In →
+                  I've verified my email
                 </button>
+              </div>
+
+              {resendStatus && (
+                <div
+                  className={`p-2 rounded-lg text-[11px] flex items-center gap-1.5 ${
+                    resendStatus.type === 'success'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {resendStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                  )}
+                  <span>{resendStatus.message}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                    Full Name *
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Hemang Mehta"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                    Primary Target Role
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      value={targetRole}
+                      onChange={(e) => setTargetRole(e.target.value)}
+                      placeholder="Full Stack Engineer"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (isEmailVerificationPending) setIsEmailVerificationPending(false);
+                  }}
+                  placeholder="name@example.com"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                />
               </div>
             </div>
-          ) : (
-            <>
-              {/* Mode Switcher Tabs */}
-              <div className="flex border-b border-zinc-200 mb-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signin');
-                    setErrorMsg('');
-                    setSuccessMsg('');
-                  }}
-                  className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                    mode === 'signin'
-                      ? 'border-[#0A66C2] text-[#0A66C2]'
-                      : 'border-transparent text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signup');
-                    setErrorMsg('');
-                    setSuccessMsg('');
-                  }}
-                  className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                    mode === 'signup'
-                      ? 'border-[#0A66C2] text-[#0A66C2]'
-                      : 'border-transparent text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  Create Account
-                </button>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                Password *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+                />
               </div>
-
-              {errorMsg && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{errorMsg}</span>
-                </div>
+              {mode === 'signup' && (
+                <p className="text-[11px] text-zinc-400 mt-1">Must be at least 6 characters</p>
               )}
+            </div>
 
-              {successMsg && (
-                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>{successMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {mode === 'signup' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                        Full Name *
-                      </label>
-                      <div className="relative">
-                        <UserIcon className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                        <input
-                          type="text"
-                          required
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="Hemang Mehta"
-                          className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                        Primary Target Role
-                      </label>
-                      <div className="relative">
-                        <Briefcase className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                        <input
-                          type="text"
-                          value={targetRole}
-                          onChange={(e) => setTargetRole(e.target.value)}
-                          placeholder="Full Stack Engineer"
-                          className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                    Email Address *
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@example.com"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                    />
-                  </div>
-                  {mode === 'signup' && (
-                    <p className="text-[11px] text-zinc-400 mt-1">Must be at least 6 characters</p>
-                  )}
-                </div>
+            {mode === 'signin' && isEmailVerificationPending ? (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  disabled
+                  className="w-full py-2.5 px-4 bg-zinc-100 border border-zinc-200 text-zinc-400 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none"
+                >
+                  <Mail className="w-4 h-4 text-zinc-400" />
+                  <span>Please confirm your email to sign in</span>
+                </button>
 
                 <button
-                  type="submit"
+                  type="button"
                   disabled={loading}
-                  className="w-full py-2.5 px-4 bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-sm rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+                  onClick={() => {
+                    setIsEmailVerificationPending(false);
+                    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                    handleSubmit(fakeEvent);
+                  }}
+                  className="w-full py-2 px-3 text-xs text-[#0A66C2] hover:text-[#004182] font-semibold text-center cursor-pointer transition-colors"
                 >
                   {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="flex items-center justify-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Signing you in...</span>
+                    </span>
                   ) : (
-                    <ArrowRight className="w-4 h-4" />
+                    <span>Already clicked the link? Sign In now →</span>
                   )}
-                  <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Account & Continue'}</span>
                 </button>
-              </form>
-            </>
-          )}
+              </div>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 bg-[#0A66C2] hover:bg-[#004182] text-white font-semibold text-sm rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="w-4 h-4" />
+                )}
+                <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Account & Continue'}</span>
+              </button>
+            )}
+          </form>
 
           {/* Security Features Info Box */}
           <div className="mt-6 pt-5 border-t border-zinc-100 text-[11px] text-zinc-500 space-y-2">

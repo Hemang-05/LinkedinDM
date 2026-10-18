@@ -20,7 +20,7 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [verificationNotice, setVerificationNotice] = useState(false);
+  const [isEmailVerificationPending, setIsEmailVerificationPending] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -142,9 +142,13 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
           return;
         }
 
-        // If confirmation is required, show verification view
+        // If email confirmation is required by Supabase:
+        // Automatically switch to Sign In with credentials intact!
+        setMode('signin');
+        setIsEmailVerificationPending(true);
         setPendingVerificationEmail(email.trim());
-        setVerificationNotice(true);
+        setErrorMsg('');
+        setSuccessMsg('');
         setLoading(false);
         return;
       } else {
@@ -155,8 +159,9 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
 
         if (error) {
           if (error.message.toLowerCase().includes('email not confirmed')) {
+            setIsEmailVerificationPending(true);
             setPendingVerificationEmail(email.trim());
-            setVerificationNotice(true);
+            setErrorMsg('');
             setLoading(false);
             return;
           }
@@ -217,119 +222,144 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
 
-        {verificationNotice ? (
-          <div className="p-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 bg-blue-50 text-[#0A66C2] rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50">
-              <Mail className="w-7 h-7 animate-pulse" />
-            </div>
-
-            <div>
-              <h3 className="text-lg font-bold text-zinc-900">Verify your email address</h3>
-              <p className="text-xs text-zinc-600 mt-2 leading-relaxed px-2">
-                We sent a verification link to{' '}
-                <span className="font-semibold text-zinc-900">{pendingVerificationEmail}</span>.
-                Please check your inbox (and spam folder) and click the link to activate your workspace.
-              </p>
-            </div>
-
-            {resendStatus && (
-              <div
-                className={`p-3 rounded-xl text-xs flex items-center justify-center gap-2 ${
-                  resendStatus.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                }`}
-              >
-                {resendStatus.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                )}
-                <span>{resendStatus.message}</span>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Verification email sent message on top */}
+          {isEmailVerificationPending && (
+            <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl text-blue-950 text-xs space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-start gap-2.5">
+                <Mail className="w-4 h-4 text-[#0A66C2] shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-900">Verification link sent to your email!</p>
+                  <p className="text-blue-800/90 text-[11px] mt-0.5 leading-relaxed">
+                    We sent a confirmation link to <span className="font-semibold text-blue-950">{pendingVerificationEmail || email}</span>.
+                    Please check your inbox (and spam folder) and confirm your email.
+                  </p>
+                </div>
               </div>
-            )}
 
-            <div className="pt-2 space-y-2">
-              <button
-                type="button"
-                disabled={isResending}
-                onClick={handleResendVerification}
-                className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isResending ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-600" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-                <span>Resend Verification Link</span>
-              </button>
+              <div className="flex items-center justify-between pt-1.5 border-t border-blue-100 text-[11px]">
+                <button
+                  type="button"
+                  disabled={isResending}
+                  onClick={handleResendVerification}
+                  className="text-[#0A66C2] hover:underline font-semibold cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isResending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  <span>Resend verification email</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setVerificationNotice(false);
-                  setMode('signin');
-                  setEmail(pendingVerificationEmail);
-                  setErrorMsg('');
-                  setSuccessMsg('Email confirmed? Sign in below:');
+                <button
+                  type="button"
+                  onClick={() => setIsEmailVerificationPending(false)}
+                  className="text-zinc-600 hover:text-zinc-900 font-medium cursor-pointer"
+                >
+                  I've verified my email
+                </button>
+              </div>
+
+              {resendStatus && (
+                <div
+                  className={`p-2 rounded-lg text-[11px] flex items-center gap-1.5 ${
+                    resendStatus.type === 'success'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {resendStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                  )}
+                  <span>{resendStatus.message}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (isEmailVerificationPending) setIsEmailVerificationPending(false);
                 }}
-                className="w-full py-2 px-4 text-[#0A66C2] hover:text-[#004182] text-xs font-semibold cursor-pointer transition-colors"
-              >
-                Already verified? Proceed to Sign In →
-              </button>
+                placeholder="name@example.com"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+              />
             </div>
           </div>
-        ) : (
-          /* Form */
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {errorMsg && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
 
-            {successMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{successMsg}</span>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                />
-              </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">
+              Password
+            </label>
+            <div className="relative">
+              <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
+              />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0A66C2] focus:border-transparent text-zinc-900 placeholder:text-zinc-400"
-                />
-              </div>
+          {mode === 'signin' && isEmailVerificationPending ? (
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                disabled
+                className="w-full py-2.5 px-4 bg-zinc-100 border border-zinc-200 text-zinc-400 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none"
+              >
+                <Mail className="w-4 h-4 text-zinc-400" />
+                <span>Please confirm your email to sign in</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setIsEmailVerificationPending(false);
+                  const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                  handleSubmit(fakeEvent);
+                }}
+                className="w-full py-2 px-3 text-xs text-[#0A66C2] hover:text-[#004182] font-semibold text-center cursor-pointer transition-colors"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Signing you in...</span>
+                  </span>
+                ) : (
+                  <span>Already clicked the link? Sign In now →</span>
+                )}
+              </button>
             </div>
-
+          ) : (
             <button
               type="submit"
               disabled={loading}
@@ -342,40 +372,41 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
               )}
               <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
             </button>
+          )}
 
-            <div className="pt-2 text-center text-xs text-zinc-500">
-              {mode === 'signin' ? (
-                <span>
-                  Don't have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('signup');
-                      setErrorMsg('');
-                    }}
-                    className="text-[#0A66C2] font-semibold hover:underline cursor-pointer"
-                  >
-                    Sign Up
-                  </button>
-                </span>
-              ) : (
-                <span>
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('signin');
-                      setErrorMsg('');
-                    }}
-                    className="text-[#0A66C2] font-semibold hover:underline cursor-pointer"
-                  >
-                    Sign In
-                  </button>
-                </span>
-              )}
-            </div>
-          </form>
-        )}
+          <div className="pt-2 text-center text-xs text-zinc-500">
+            {mode === 'signin' ? (
+              <span>
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup');
+                    setErrorMsg('');
+                    setIsEmailVerificationPending(false);
+                  }}
+                  className="text-[#0A66C2] font-semibold hover:underline cursor-pointer"
+                >
+                  Sign Up
+                </button>
+              </span>
+            ) : (
+              <span>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signin');
+                    setErrorMsg('');
+                  }}
+                  className="text-[#0A66C2] font-semibold hover:underline cursor-pointer"
+                >
+                  Sign In
+                </button>
+              </span>
+            )}
+          </div>
+        </form>
       </div>
     </div>
   );
