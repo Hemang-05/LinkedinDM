@@ -42,7 +42,8 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
     setSuccessMsg('');
 
     if (!configured) {
-      setErrorMsg('Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local');
+      console.warn('[Auth] Supabase credentials not found in environment.');
+      setErrorMsg('Authentication service is currently unavailable. Please restart the dev server or try again.');
       return;
     }
 
@@ -193,18 +194,6 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
             </button>
           </div>
 
-          {/* Configuration Warning if missing */}
-          {!configured && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <span>Supabase Configuration Required</span>
-              </div>
-              <p className="text-amber-800 text-[11px]">
-                Please check <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code> to ensure Supabase environment variables are set.
-              </p>
-            </div>
-          )}
 
           {errorMsg && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">

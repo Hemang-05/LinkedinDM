@@ -31,7 +31,8 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
     setSuccessMsg('');
 
     if (!configured) {
-      setErrorMsg('Supabase is not configured yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local');
+      console.warn('[Auth] Supabase credentials not found in environment.');
+      setErrorMsg('Authentication service is currently unavailable. Please restart the dev server or try again.');
       return;
     }
 
@@ -147,22 +148,6 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
           </div>
         </div>
 
-        {/* Notice if Supabase keys not set */}
-        {!configured && (
-          <div className="m-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-2">
-            <div className="flex items-center gap-2 font-semibold">
-              <AlertCircle className="w-4 h-4 text-amber-600" />
-              <span>Supabase Not Configured</span>
-            </div>
-            <p className="text-amber-800 leading-relaxed">
-              To enable cloud persistence, copy your Supabase Project URL and Anon Public Key into <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code>:
-            </p>
-            <pre className="p-2 bg-amber-100/70 rounded text-[11px] font-mono text-amber-950 overflow-x-auto">
-              NEXT_PUBLIC_SUPABASE_URL=https://xyz.supabase.co{'\n'}
-              NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-            </pre>
-          </div>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
