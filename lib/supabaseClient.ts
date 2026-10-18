@@ -1,14 +1,16 @@
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+export const getSupabaseUrl = (): string => process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+export const getSupabaseAnonKey = (): string => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = (): boolean => {
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
   return Boolean(
-    supabaseUrl &&
-    supabaseAnonKey &&
-    supabaseUrl.startsWith('http') &&
-    !supabaseUrl.includes('your-project')
+    url &&
+    key &&
+    url.startsWith('http') &&
+    !url.includes('your-project')
   );
 };
 
@@ -25,7 +27,7 @@ export function getSupabaseClient(): SupabaseClient | null {
     return null;
   }
   if (!clientInstance) {
-    clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    clientInstance = createClient(getSupabaseUrl(), getSupabaseAnonKey(), {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -44,7 +46,7 @@ export function getSupabaseClient(): SupabaseClient | null {
  */
 export function createSupabaseClientForToken(accessToken: string): SupabaseClient | null {
   if (!isSupabaseConfigured() || !accessToken) return null;
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(getSupabaseUrl(), getSupabaseAnonKey(), {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: {
       persistSession: false,
