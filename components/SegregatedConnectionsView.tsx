@@ -28,7 +28,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { FixedSizeList as List } from 'react-window';
-import { Prospect, SegregationGroup, OutreachGoal, NotRelevantReason } from '@/types';
+import { Prospect, SegregationGroup, OutreachGoal, NotRelevantReason, UserProfile } from '@/types';
 import { WorkflowType } from './WorkflowView';
 import { copyTextToClipboard, openLinkedInTab } from '@/lib/clipboard';
 import {
@@ -57,6 +57,8 @@ interface SegregatedConnectionsViewProps {
   onReset?: () => void;
   onReviewDM: (prospect: Prospect) => void;
   onProspectUpdated?: (updated: Prospect) => void;
+  userProfile?: UserProfile | null;
+  onOpenSettings?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -79,7 +81,9 @@ export function SegregatedConnectionsView({
   onBack,
   onReset,
   onReviewDM,
-  onProspectUpdated
+  onProspectUpdated,
+  userProfile,
+  onOpenSettings
 }: SegregatedConnectionsViewProps) {
   // View mode: 'queue' (Single card review queue), 'list' (Virtualized list), 'not_relevant' (Dismissed prospects)
   const [viewMode, setViewMode] = useState<'queue' | 'list' | 'not_relevant'>('queue');
@@ -395,6 +399,8 @@ export function SegregatedConnectionsView({
             if (onProspectUpdated) onProspectUpdated(updated);
           }}
           onSwitchToList={() => setViewMode('list')}
+          userProfile={userProfile}
+          onOpenSettings={onOpenSettings}
         />
       )}
 

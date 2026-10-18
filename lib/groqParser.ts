@@ -1,6 +1,15 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
-import { ExtractedResumeData, parseResumeBuffer, extractTextFromBuffer } from './resumeParser';
+import {
+  ExtractedResumeData,
+  parseResumeBuffer,
+  extractTextFromBuffer,
+  extractCandidateName,
+  extractTargetRole,
+  extractSkills,
+  extractBackgroundDomain,
+  extractExperienceYears
+} from './resumeParser';
 
 export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
 
@@ -564,11 +573,12 @@ export async function parseResumeWithLlmOrFallback(
 
   // If LLM succeeded, apply code-side verification
   if (llmData) {
-    const verifiedSkills = cleanAndVerifySkills(llmData.skills || [], text);
-    const computedExp = computeExperienceFromJobs(llmData.jobs);
-    const verifiedName = verifyCandidateName(llmData.name, text);
-    const verifiedTargetRole = verifyTargetRole(llmData.targetRole, text);
-    const verifiedBackground = verifyBackground(llmData.background, text);
+    const rawSkills = cleanAndVerifySkills(llmData.skills || [], text);
+    const verifiedSkills = rawSkills.length > 0 ? rawSkills : extractSkills(text).all;
+    const computedExp = computeExperienceFromJobs(llmData.jobs) ?? extractExperienceYears(text);
+    const verifiedName = verifyCandidateName(llmData.name, text) || extractCandidateName(text, filename);
+    const verifiedTargetRole = verifyTargetRole(llmData.targetRole, text) || extractTargetRole(text, verifiedName);
+    const verifiedBackground = verifyBackground(llmData.background, text) || extractBackgroundDomain(text, verifiedTargetRole, verifiedSkills);
 
     // Extract email and phone via regex from text
     const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);

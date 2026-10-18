@@ -220,32 +220,92 @@ export async function extractTextFromBuffer(
   // 1. PDF
   if (lower.includes('pdf') || lower.endsWith('.pdf')) {
     try {
-      const pdfModule = await import('pdf-parse');
-      const PDFClass = (pdfModule as any).PDFParse || (pdfModule as any).default || pdfModule;
-      if (typeof PDFClass === 'function') {
+      let pdfModule: any;
+      try {
+        const { createRequire } = await import('module');
+        const req = createRequire(process.cwd() + '/package.json');
+        pdfModule = req('pdf-parse');
+      } catch {
+        pdfModule = await import('pdf-parse');
+      }
+
+      const PDFClass =
+        (typeof pdfModule?.PDFParse === 'function' ? pdfModule.PDFParse : null) ||
+        (typeof pdfModule?.default?.PDFParse === 'function' ? pdfModule.default.PDFParse : null) ||
+        (typeof pdfModule?.default === 'function' ? pdfModule.default : null) ||
+        (typeof pdfModule === 'function' ? pdfModule : null);
+
+      if (PDFClass) {
+        let extractedText = '';
+        // 1. Try modern class constructor (pdf-parse v2)
         try {
-          // If class constructor
-          const parser = new (PDFClass as any)({ data: buffer });
+          const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+          const parser = new (PDFClass as any)({ data: uint8 });
           if (typeof parser.getText === 'function') {
             const data = await parser.getText();
-            return cleanPdfExtractedText(data.text || '');
+            extractedText = cleanPdfExtractedText(data?.text || '');
           }
-        } catch {
-          // If callable function
-          const data = await (PDFClass as any)(buffer);
-          return cleanPdfExtractedText(data.text || '');
+        } catch (e1) {
+          // 2. Try legacy callable function (pdf-parse v1)
+          try {
+            const data = await (PDFClass as any)(buffer);
+            extractedText = cleanPdfExtractedText(data?.text || '');
+          } catch (e2) {
+            console.error('Error invoking PDF parser:', e2);
+          }
+        }
+
+        if (extractedText.trim().length > 10) {
+          return extractedText;
         }
       }
     } catch (err) {
-      console.error('Error parsing PDF with pdf-parse:', err);
+      console.error('Error loading pdf-parse module:', err);
     }
 
-    // Fallback: extract ASCII / UTF-8 strings from PDF streams
-    const raw = buffer.toString('latin1');
-    const textMatches = raw.match(/\(([^()]{2,})\)\s*Tj/g);
-    if (textMatches && textMatches.length > 3) {
-      return cleanPdfExtractedText(textMatches.map(m => m.replace(/^[()]|[()]Tj$/g, '')).join(' '));
-    }
+    // Fallback: extract strings from raw or zlib-compressed PDF streams
+    try {
+      const zlib = await import('zlib');
+      const raw = buffer.toString('latin1');
+      const streamChunks: string[] = [];
+
+      // 1. Plain uncompressed strings
+      const uncompressed = raw.match(/\(([^()]{2,})\)\s*Tj/g);
+      if (uncompressed && uncompressed.length > 3) {
+        streamChunks.push(uncompressed.map(m => m.replace(/^[()]|[()]Tj$/g, '')).join(' '));
+      }
+
+      // 2. FlateDecode streams
+      let searchIdx = 0;
+      while (searchIdx < buffer.length) {
+        const streamStart = buffer.indexOf('stream', searchIdx);
+        if (streamStart === -1) break;
+
+        let contentStart = streamStart + 6;
+        if (buffer[contentStart] === 0x0d && buffer[contentStart + 1] === 0x0a) contentStart += 2;
+        else if (buffer[contentStart] === 0x0a) contentStart += 1;
+
+        const streamEnd = buffer.indexOf('endstream', contentStart);
+        if (streamEnd === -1) break;
+
+        const slice = buffer.subarray(contentStart, streamEnd);
+        try {
+          const decompressed = zlib.inflateSync(slice).toString('latin1');
+          const matches = decompressed.match(/\(([^()]{2,})\)\s*Tj/g) || decompressed.match(/\[([^\]]+)\]\s*TJ/g);
+          if (matches) {
+            streamChunks.push(matches.map(m => m.replace(/^[(\[]|[)\]]T[jJ]$/g, '').replace(/\\([()\\])/g, '$1')).join(' '));
+          }
+        } catch {}
+
+        searchIdx = streamEnd + 9;
+      }
+
+      if (streamChunks.length > 0) {
+        const combined = cleanPdfExtractedText(streamChunks.join(' '));
+        if (combined.length > 20) return combined;
+      }
+    } catch {}
+
     return '';
   }
 
@@ -516,9 +576,20 @@ function extractSkillsFromDedicatedSection(text: string): string[] {
 
       // Strip prefixes like "Languages:", "Frontend:", "Databases:", "Tools - "
       const cleanLine = line.replace(/^[a-zA-Z\s&/]+\s*[:–—\-]\s*/, '');
-      const tokens = cleanLine.split(/[,•·|/]/).map(t => t.trim()).filter(t => t.length >= 2 && t.length <= 30);
+      const protectedLine = cleanLine.replace(/\bCI\/CD\b/gi, 'CI_CD');
+      const tokens = protectedLine.split(/[,•·|]/).map(t => t.trim()).filter(t => t.length >= 2 && t.length <= 40);
       for (const t of tokens) {
-        const cleanToken = t.replace(/\s*\(.*?\)/g, '').trim();
+        const parenthetical = t.match(/\((.*?)\)/);
+        if (parenthetical && parenthetical[1]) {
+          const subTokens = parenthetical[1].split(/[,/]/).map(s => s.trim()).filter(s => s.length >= 2 && s.length <= 25);
+          for (const sub of subTokens) {
+            if (!/^(etc|and|various|experience|proficient|knowledge|familiar|ubuntu)$/i.test(sub)) {
+              detectedSkills.push(sub.replace(/_/g, '/'));
+            }
+          }
+        }
+
+        const cleanToken = t.replace(/\s*\(.*?\)/g, '').trim().replace(/_/g, '/');
         if (cleanToken.length >= 2 && !/^(etc|and|various|experience|proficient|knowledge|familiar)$/i.test(cleanToken)) {
           detectedSkills.push(cleanToken);
         }
@@ -613,7 +684,8 @@ export function extractBackgroundDomain(text: string, role?: string | null, skil
  * Extracts years of experience from resume text
  */
 export function extractExperienceYears(text: string): number | null {
-  const match = text.match(/(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+experience/i);
+  // Matches "3 years of experience", "3+ yrs experience", "3 years of end-to-end product experience", etc.
+  const match = text.match(/(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?(?:\s+[\w\-]+){0,4}\s+experience/i);
   if (match && match[1]) {
     const yrs = parseInt(match[1], 10);
     if (!isNaN(yrs) && yrs >= 0 && yrs <= 30) {

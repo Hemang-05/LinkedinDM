@@ -50,6 +50,44 @@ export async function POST(request: Request) {
 
     newProspect.score = calculateScoreAndMatching(newProspect, newProspect.jobOpportunity);
 
+    // If request contains Authorization header, authenticate and persist for current user
+    const authHeader = request.headers.get('authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    if (token) {
+      const { authenticateApiRequest } = await import('@/lib/supabaseClient');
+      const auth = await authenticateApiRequest(request);
+      if (!auth) {
+        return NextResponse.json({ success: false, error: 'Unauthorized: Invalid token' }, { status: 401 });
+      }
+
+      // Canonical UUID strictly from Supabase Auth (never trusting body.user_id)
+      const userId = auth.user.id;
+      const { insertNewConnections } = await import('@/lib/supabaseDb');
+      const { rows } = await insertNewConnections(userId, [{
+        user_id: userId,
+        linkedin_url: linkedinUrl,
+        name,
+        company,
+        position: jobTitle || 'Team Member',
+        location: location || 'Remote',
+        notes: notes || null,
+        status: 'new',
+        score: newProspect.score?.totalScore ?? null,
+        raw_data: {
+          score: newProspect.score,
+          jobOpportunity: newProspect.jobOpportunity,
+          classification,
+          relationshipType,
+          segregationGroup
+        }
+      }], auth.client);
+
+      if (rows && rows.length > 0) {
+        newProspect.id = rows[0].id;
+      }
+    }
+
     return NextResponse.json({ success: true, prospect: newProspect });
   } catch (error) {
     console.error('API /prospects POST error:', error);

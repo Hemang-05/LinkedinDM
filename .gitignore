@@ -32,9 +32,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-/scratch_test/
-
+scratch_test/
 # local user data
 data/
 jobhunt_data.json
 outreach_log.txt
+*.pdf
+[Hh]emang_[Rr]esume.pdf
+Hemang_Resume.pdf

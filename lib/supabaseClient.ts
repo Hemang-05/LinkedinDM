@@ -1,0 +1,137 @@
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+export const isSupabaseConfigured = (): boolean => {
+  return Boolean(
+    supabaseUrl &&
+    supabaseAnonKey &&
+    supabaseUrl.startsWith('http') &&
+    !supabaseUrl.includes('your-project')
+  );
+};
+
+let clientInstance: SupabaseClient | null = null;
+
+/**
+ * Browser singleton. There must be exactly ONE auth-persisting client per
+ * browser context: multiple GoTrueClient instances share the same session
+ * storage key and race on refresh-token rotation, which can wipe the session
+ * and make subsequent DB requests go out as `anon` (RLS 42501 / HTTP 401).
+ */
+export function getSupabaseClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+  if (!clientInstance) {
+    clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  }
+  return clientInstance;
+}
+
+/**
+ * Server-only: creates a short-lived client for ONE request, bound to the
+ * caller's Supabase JWT. Every PostgREST call carries `Authorization: Bearer <jwt>`,
+ * so Postgres RLS evaluates auth.uid() as the authenticated user.
+ * Never share this client across requests.
+ */
+export function createSupabaseClientForToken(accessToken: string): SupabaseClient | null {
+  if (!isSupabaseConfigured() || !accessToken) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
+}
+
+/**
+ * Server-only: authenticates an API request from its Bearer token.
+ * Returns the verified Supabase user and a JWT-bound client, or null.
+ */
+export async function authenticateApiRequest(
+  request: Request
+): Promise<{ user: User; client: SupabaseClient } | null> {
+  const authHeader = request.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+
+  const client = createSupabaseClientForToken(token);
+  if (!client) return null;
+
+  const { data: { user }, error } = await client.auth.getUser(token);
+  if (error || !user) return null;
+  return { user, client };
+}
+
+/**
+ * Returns current authenticated Supabase user or null.
+ * Uses supabase.auth.getUser() as the canonical verification,
+ * with getSession() fallback for offline/instant hydration.
+ */
+export async function getCurrentSupabaseUser(): Promise<User | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data: { user }, error: userError } = await client.auth.getUser();
+    if (!userError && user) {
+      return user;
+    }
+    // If the server rejected the token or user was deleted, clear stale storage
+    if (userError) {
+      console.warn('[Supabase] Auth user verification failed, signing out:', userError.message);
+      try {
+        await client.auth.signOut();
+      } catch {}
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Supabase] Failed getting authenticated user:', err);
+    return null;
+  }
+}
+
+/**
+ * Returns current Supabase JWT access token for API Authorization header
+ */
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data: { session }, error } = await client.auth.getSession();
+    if (error || !session) return null;
+    return session.access_token || null;
+  } catch (err) {
+    console.warn('[Supabase] Failed getting access token:', err);
+    return null;
+  }
+}
+
+/**
+ * Resolves the canonical site URL for authentication redirects:
+ * - Uses NEXT_PUBLIC_SITE_URL if defined
+ * - Uses window.location.origin in client-side runtime
+ * - Defaults to 'http://localhost:3000' in development and 'https://linkedindm.vercel.app' in production
+ */
+export function getSiteUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return process.env.NODE_ENV === 'production'
+    ? 'https://linkedindm.vercel.app'
+    : 'http://localhost:3000';
+}
+
+

@@ -17,7 +17,10 @@ import {
   recordExportDate,
   getClientSession,
   saveClientSession,
-  clearClientSession
+  clearClientSession,
+  setActiveStorageUser,
+  getLegacyUnmigratedProspects,
+  clearLegacyStorage
 } from '@/lib/clientStorage';
 import { EMPTY_PROFILE } from '@/lib/profile';
 import { Header } from '@/components/Header';
@@ -32,6 +35,19 @@ import { LinkedInCsvGuideModal } from '@/components/LinkedInCsvGuideModal';
 import { WorkflowView, WorkflowType } from '@/components/WorkflowView';
 import { SegregatedConnectionsView } from '@/components/SegregatedConnectionsView';
 import { ReviewQueueView } from '@/components/ReviewQueueView';
+import { FollowUpsView } from '@/components/FollowUpsView';
+import { AuthScreen } from '@/components/AuthScreen';
+import { DMLogo } from '@/components/DMLogo';
+import { normalizeLinkedInUrl } from '@/lib/urlNormalizer';
+import { getCurrentSupabaseUser, getSupabaseClient } from '@/lib/supabaseClient';
+import {
+  getSupabaseConnections,
+  getSupabaseProfile,
+  getDueFollowUps,
+  migrateLocalDataToSupabase,
+  saveSupabaseProfile,
+  ensureSupabaseProfile
+} from '@/lib/supabaseDb';
 import {
   Sparkles,
   Zap,
@@ -51,10 +67,14 @@ import {
   X,
   Upload,
   Loader2,
-  Layers
+  Layers,
+  CalendarClock
 } from 'lucide-react';
 
 export default function Home() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authUser, setAuthUser] = useState<any | null>(null);
+
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowType | null>(null);
   const [workflowStep, setWorkflowStep] = useState<'upload' | 'segregated'>('upload');
@@ -63,6 +83,7 @@ export default function Home() {
   const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [dueFollowUpsCount, setDueFollowUpsCount] = useState<number>(0);
 
   // User profile state (editable per user)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -90,74 +111,133 @@ export default function Home() {
   const [lastExportDate, setLastExportDate] = useState<string | null>(null);
   const [showBackupReminder, setShowBackupReminder] = useState<boolean>(true);
 
-  // Load browser storage on client mount with automatic deduplication
+  // Centralized user data loader (Supabase is Single Source of Truth)
+  const loadUserData = async (user: any) => {
+    try {
+      setActiveStorageUser(user.id);
+      setAuthUser(user);
+
+      // 1. Fetch user profile from Supabase (Requirement 3: UUID is primary identity key)
+      let supaProf = await getSupabaseProfile(user.id);
+      if (!supaProf || !supaProf.name || supaProf.name === 'Your Name') {
+        supaProf = await ensureSupabaseProfile(user.id, user.email, {
+          name: user.user_metadata?.name || user.email?.split('@')[0] || 'User'
+        });
+      }
+      setUserProfile(supaProf);
+      saveClientProfile(supaProf, user.id);
+      setEditName(supaProf.name || '');
+      setEditTitle(supaProf.title || '');
+      setEditTargetRole(supaProf.targetRole || supaProf.targetRoles?.[0] || '');
+      setEditSkills(supaProf.skills?.join(', ') || '');
+
+      // 2. Fetch connections for this user from Supabase (Requirement 4 & 5)
+      let supaConns = await getSupabaseConnections(user.id);
+
+      // One-time legacy local storage migration only for first unassigned cache
+      const legacyP = getLegacyUnmigratedProspects();
+      if (supaConns.length === 0 && legacyP.length > 0) {
+        await migrateLocalDataToSupabase(user.id, legacyP);
+        clearLegacyStorage();
+        supaConns = await getSupabaseConnections(user.id);
+      }
+
+      setProspects(supaConns);
+      saveClientProspects(supaConns, user.id);
+
+      // 3. Due follow-ups count for badge (Requirement 7)
+      const due = await getDueFollowUps(user.id);
+      setDueFollowUpsCount(due.length);
+
+      // 4. Outreach logs for this user
+      const userLogs = getClientOutreachLogs(user.id);
+      setOutreachLogs(userLogs);
+
+      // 5. Restore user's session
+      const session = getClientSession(user.id);
+      if (supaConns.length > 0) {
+        setSelectedWorkflow((session?.selectedWorkflow as WorkflowType) || 'job-hunt');
+        setWorkflowStep('segregated');
+        if (session?.currentTab) setCurrentTab(session.currentTab as NavTab);
+        if (session?.prospectsViewMode) setProspectsViewMode(session.prospectsViewMode);
+      } else if (session?.selectedWorkflow) {
+        setSelectedWorkflow(session.selectedWorkflow as WorkflowType);
+        setWorkflowStep(session.workflowStep || 'upload');
+        if (session?.currentTab) setCurrentTab(session.currentTab as NavTab);
+      } else {
+        setSelectedWorkflow('job-hunt');
+        setWorkflowStep('upload');
+      }
+    } catch (err) {
+      console.error('[Page] Error loading user data:', err);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOutUser = () => {
+    if (authUser?.id) {
+      clearClientSession(authUser.id);
+    }
+    setActiveStorageUser(null);
+    setAuthUser(null);
+    setProspects([]);
+    setUserProfile(null);
+    setOutreachLogs([]);
+    setDueFollowUpsCount(0);
+    setSelectedWorkflow(null);
+    setWorkflowStep('upload');
+    setAuthLoading(false);
+  };
+
+  // Restore session & determine authenticated user on startup (Requirement 9)
   useEffect(() => {
     setLastExportDate(getLastExportedDate());
-    const localP = getClientProspects();
-    const seen = new Set<string>();
-    const cleaned: Prospect[] = [];
 
-    for (const p of localP) {
-      // Remove any old failed parse records
-      if (p.name === 'Prospect' && (p.company === 'Startup' || p.jobTitle === 'Engineer')) {
-        continue;
+    const initAuth = async () => {
+      setAuthLoading(true);
+      const user = await getCurrentSupabaseUser();
+      if (!user) {
+        setAuthUser(null);
+        setActiveStorageUser(null);
+        setProspects([]);
+        setUserProfile(null);
+        setAuthLoading(false);
+        return;
       }
-      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
-        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
-        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
+      await loadUserData(user);
+    };
 
-      if (!seen.has(key)) {
-        seen.add(key);
-        cleaned.push(p);
-      }
-    }
+    initAuth();
 
-    setProspects(cleaned);
-    saveClientProspects(cleaned);
-
-    const localLogs = getClientOutreachLogs();
-    setOutreachLogs(localLogs);
-
-    const localProf = getClientProfile();
-    setUserProfile(localProf);
-    if (localProf) {
-      setEditName(localProf.name || '');
-      setEditTitle(localProf.title || '');
-      setEditTargetRole(localProf.targetRole || localProf.targetRoles?.[0] || '');
-      setEditSkills(localProf.skills?.join(', ') || '');
-    }
-
-    // Restore Session & Active Workspace across reloads
-    const session = getClientSession();
-    if (cleaned.length > 0) {
-      // User already has imported connections: restore directly into their active workspace
-      const restoredWorkflow = (session?.selectedWorkflow as WorkflowType) || 'job-hunt';
-      setSelectedWorkflow(restoredWorkflow);
-      setWorkflowStep('segregated');
-      if (session?.currentTab) {
-        setCurrentTab(session.currentTab as NavTab);
-      }
-      if (session?.prospectsViewMode) {
-        setProspectsViewMode(session.prospectsViewMode);
-      }
-    } else if (session?.selectedWorkflow) {
-      setSelectedWorkflow(session.selectedWorkflow as WorkflowType);
-      setWorkflowStep(session.workflowStep || 'upload');
-      if (session?.currentTab) {
-        setCurrentTab(session.currentTab as NavTab);
-      }
+    const client = getSupabaseClient();
+    if (client) {
+      const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          if (session.user.id !== authUser?.id) {
+            await loadUserData(session.user);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          handleSignOutUser();
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
     }
   }, []);
 
-  // Persist session state to localStorage whenever navigation or workflow changes
+  // Persist session state to localStorage for the active user whenever navigation or workflow changes
   useEffect(() => {
-    saveClientSession({
-      selectedWorkflow,
-      workflowStep,
-      currentTab,
-      prospectsViewMode
-    });
-  }, [selectedWorkflow, workflowStep, currentTab, prospectsViewMode]);
+    if (authUser?.id) {
+      saveClientSession({
+        selectedWorkflow,
+        workflowStep,
+        currentTab,
+        prospectsViewMode
+      }, authUser.id);
+    }
+  }, [selectedWorkflow, workflowStep, currentTab, prospectsViewMode, authUser?.id]);
 
   const handleSaveProfile = () => {
     const updatedSkills = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
@@ -170,7 +250,10 @@ export default function Home() {
       skills: updatedSkills
     };
     setUserProfile(updated);
-    saveClientProfile(updated);
+    saveClientProfile(updated, authUser?.id);
+    if (authUser?.id) {
+      saveSupabaseProfile(authUser.id, updated, authUser.email);
+    }
     setIsEditingProfile(false);
   };
 
@@ -219,7 +302,10 @@ export default function Home() {
           relevantExperience: data.relevantExperience || undefined
         };
         setUserProfile(updated);
-        saveClientProfile(updated);
+        saveClientProfile(updated, authUser?.id);
+        if (authUser?.id) {
+          saveSupabaseProfile(authUser.id, updated, authUser.email);
+        }
         setSettingsResumeFeedback('Resume parsed with AI! Details auto-filled and saved below.');
       } else {
         setSettingsResumeFeedback(`Failed: ${data.error || 'Could not parse resume'}`);
@@ -234,16 +320,19 @@ export default function Home() {
   const handleProspectUpdated = (updated: Prospect) => {
     const updatedList = prospects.map((p) => (p.id === updated.id ? updated : p));
     setProspects(updatedList);
-    saveClientProspects(updatedList);
+    saveClientProspects(updatedList, authUser?.id);
     
     // If marked contacted, ensure DM review modal is closed / not opened
     if (updated.status === 'Contacted') {
       setSelectedProspect(null);
+      if (authUser?.id) {
+        getDueFollowUps(authUser.id).then((due) => setDueFollowUpsCount(due.length));
+      }
     } else if (selectedProspect && selectedProspect.id === updated.id) {
       setSelectedProspect(updated);
     }
 
-    const updatedLogs = getClientOutreachLogs();
+    const updatedLogs = getClientOutreachLogs(authUser?.id);
     setOutreachLogs(updatedLogs);
   };
 
@@ -251,6 +340,7 @@ export default function Home() {
     addClientProspect(newP);
     const updated = [newP, ...prospects];
     setProspects(updated);
+    saveClientProspects(updated, authUser?.id);
     setSelectedProspect(newP);
   };
 
@@ -275,46 +365,79 @@ export default function Home() {
     }
   };
 
-  const handleCsvImportComplete = (imported: Prospect[]) => {
-    const seen = new Set<string>();
-    const cleaned: Prospect[] = [];
-    for (const p of [...imported, ...prospects]) {
-      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
-        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
-        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        cleaned.push(p);
+  const handleCsvImportComplete = async (imported: Prospect[]) => {
+    let currentList = prospects;
+    if (authUser?.id) {
+      currentList = await getSupabaseConnections(authUser.id);
+    }
+
+    const map = new Map<string, Prospect>();
+    for (const p of currentList) {
+      const norm = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      map.set(norm, p);
+    }
+
+    for (const p of imported) {
+      const norm = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      const existing = map.get(norm);
+      if (!existing) {
+        map.set(norm, p);
+      } else if (existing.status === 'Contacted' || existing.status === 'not_relevant') {
+        // Strict preservation: Contacted and Skipped are terminal states for the NEW queue
+      } else {
+        map.set(norm, p);
       }
     }
+
+    const cleaned = Array.from(map.values());
     setProspects(cleaned);
-    saveClientProspects(cleaned);
+    saveClientProspects(cleaned, authUser?.id);
+    if (authUser?.id) {
+      const due = await getDueFollowUps(authUser.id);
+      setDueFollowUpsCount(due.length);
+    }
     requestStoragePersistence();
     setCurrentTab('prospects');
   };
 
-  const handleWorkflowImportComplete = (imported: Prospect[]) => {
-    // Deduplicate fresh import
-    const seen = new Set<string>();
-    const cleaned: Prospect[] = [];
+  const handleWorkflowImportComplete = async (imported: Prospect[]) => {
+    let currentList = prospects;
+    if (authUser?.id) {
+      currentList = await getSupabaseConnections(authUser.id);
+    }
+
+    const map = new Map<string, Prospect>();
+    for (const p of currentList) {
+      const norm = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      map.set(norm, p);
+    }
+
     for (const p of imported) {
-      const key = (p.linkedinUrl && p.linkedinUrl.includes('linkedin.com/in/'))
-        ? p.linkedinUrl.trim().toLowerCase().replace(/\/+$/, '')
-        : `${p.name.trim().toLowerCase()}|${p.company.trim().toLowerCase()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        cleaned.push(p);
+      const norm = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      const existing = map.get(norm);
+      if (!existing) {
+        map.set(norm, p);
+      } else if (existing.status === 'Contacted' || existing.status === 'not_relevant') {
+        // Strict preservation: Contacted and Skipped are terminal states for the NEW queue
+      } else {
+        map.set(norm, p);
       }
     }
+
+    const cleaned = Array.from(map.values());
     setProspects(cleaned);
-    saveClientProspects(cleaned);
+    saveClientProspects(cleaned, authUser?.id);
+    if (authUser?.id) {
+      const due = await getDueFollowUps(authUser.id);
+      setDueFollowUpsCount(due.length);
+    }
     requestStoragePersistence();
     setWorkflowStep('segregated');
   };
 
   const handleOutreachStatusChange = async (entry: OutreachLogEntry, newStatus: OutreachStatus) => {
     updateClientOutreachStatus(entry.linkedinUrl, entry.name, entry.company, newStatus);
-    const updatedLogs = getClientOutreachLogs();
+    const updatedLogs = getClientOutreachLogs(authUser?.id);
     setOutreachLogs(updatedLogs);
 
     const updatedProspects = prospects.map((p) => {
@@ -327,7 +450,7 @@ export default function Home() {
       return p;
     });
     setProspects(updatedProspects);
-    saveClientProspects(updatedProspects);
+    saveClientProspects(updatedProspects, authUser?.id);
   };
 
   const scrollToCsvUpload = (catKey?: string) => {
@@ -351,7 +474,11 @@ export default function Home() {
         p.score?.strongMatches.some((m) => m.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchStatus =
-        prospectFilter === 'All' || p.status === prospectFilter;
+        prospectFilter === 'All'
+          ? p.status !== 'not_relevant'
+          : prospectFilter === 'Not relevant'
+          ? p.status === 'not_relevant'
+          : p.status === prospectFilter;
 
       const matchClassification =
         classificationFilter === 'All' || p.classification === classificationFilter;
@@ -430,12 +557,35 @@ export default function Home() {
     }
   ];
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F4F2EE] flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
+          <DMLogo size="lg" />
+          <div className="flex items-center gap-2 text-zinc-600 text-sm font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-[#0A66C2]" />
+            <span>Restoring secure workspace...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return <AuthScreen onAuthSuccess={(user) => loadUserData(user)} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F4F2EE] text-zinc-900 flex flex-col justify-between selection:bg-[#0A66C2]/20">
       {/* Clean Header */}
       <Header
         currentTab={currentTab}
         activeWorkflow={selectedWorkflow}
+        dueFollowUpsCount={dueFollowUpsCount}
+        contactedCount={outreachLogs.length}
+        authUser={authUser}
+        userProfile={userProfile}
+        onSignOut={handleSignOutUser}
         onTabChange={(tab) => {
           setCurrentTab(tab);
         }}
@@ -448,6 +598,15 @@ export default function Home() {
           setSelectedWorkflow(null);
           setWorkflowStep('upload');
           setCurrentTab('home');
+        }}
+        onDataImported={async () => {
+          if (authUser?.id) {
+            const conns = await getSupabaseConnections(authUser.id);
+            setProspects(conns);
+            saveClientProspects(conns, authUser.id);
+            const due = await getDueFollowUps(authUser.id);
+            setDueFollowUpsCount(due.length);
+          }
         }}
       />
 
@@ -518,6 +677,8 @@ export default function Home() {
                   }}
                   onReviewDM={(p) => setSelectedProspect(p)}
                   onProspectUpdated={handleProspectUpdated}
+                  userProfile={userProfile}
+                  onOpenSettings={() => setCurrentTab('settings')}
                 />
               )}
 
@@ -649,6 +810,8 @@ export default function Home() {
                   workflow={(selectedWorkflow || 'job-hunt') as any}
                   onProspectUpdated={handleProspectUpdated}
                   onSwitchToList={() => setProspectsViewMode('grid')}
+                  userProfile={userProfile}
+                  onOpenSettings={() => setCurrentTab('settings')}
                 />
               ) : (
                 /* GRID VIEW */
@@ -673,7 +836,7 @@ export default function Home() {
 
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
                       <span className="text-[11px] font-bold text-zinc-400 mr-1 hidden sm:inline">Status:</span>
-                      {['All', 'Not contacted', 'Contacted', 'Replied'].map((st) => (
+                      {['All', 'Not contacted', 'Contacted', 'Replied', 'Not relevant'].map((st) => (
                         <button
                           key={st}
                           onClick={() => setProspectFilter(st)}
@@ -848,6 +1011,21 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 4B: FOLLOW-UPS SEQUENCES */}
+          {currentTab === 'followups' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <FollowUpsView
+                onFollowUpCompleted={async () => {
+                  const user = await getCurrentSupabaseUser();
+                  if (user) {
+                    const due = await getDueFollowUps(user.id);
+                    setDueFollowUpsCount(due.length);
+                  }
+                }}
+              />
             </div>
           )}
 
@@ -1040,6 +1218,7 @@ export default function Home() {
           onTabChange={setCurrentTab}
           pendingReviewCount={highPriorityProspects.length}
           contactedCount={outreachLogs.length}
+          dueFollowUpsCount={dueFollowUpsCount}
         />
 
         {/* DM Review Modal */}

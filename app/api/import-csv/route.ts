@@ -1,37 +1,15 @@
 import { NextResponse } from 'next/server';
-import { classifyProspectTitle, isStudentOrIntern, ClassificationResult, classifyTitle } from '@/lib/classifier';
-import { calculateScoreAndMatching } from '@/lib/scoring';
 import { parseResumeBuffer } from '@/lib/resumeParser';
-import { Prospect, ScoreExplanation } from '@/types';
+import { runIncrementalImportPipeline } from '@/lib/importPipeline';
+import {
+  fetchExistingConnectionStatuses,
+  getLatestImport,
+  insertNewConnections,
+  recordImport
+} from '@/lib/supabaseDb';
+import { authenticateApiRequest, isSupabaseConfigured } from '@/lib/supabaseClient';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
-
-// Exact header names first (LinkedIn's export uses these), fuzzy fallback only if missing.
-const ALIASES: Record<string, string[]> = {
-  firstName: ['first name', 'first', 'firstname'],
-  lastName: ['last name', 'last', 'lastname'],
-  fullName: ['name', 'full name'],
-  url: ['url', 'profile url', 'linkedin url', 'linkedin'],
-  email: ['email address', 'email', 'e-mail'],
-  phone: ['phone', 'phone number', 'mobile'],
-  company: ['company', 'organization', 'employer'],
-  position: ['position', 'title', 'job title', 'role'],
-  location: ['location', 'city'],
-  connectedOn: ['connected on'],
-  notes: ['notes', 'headline', 'summary']
-};
-
-const FUZZY: Record<string, RegExp> = {
-  firstName: /first/,
-  lastName: /last/,
-  url: /linkedin|profile/,
-  email: /e-?mail/,
-  phone: /phone|mobile/,
-  company: /company|organi[sz]ation/,
-  position: /position|title/,
-  location: /location/,
-  notes: /headline|summary/
-};
 
 export async function POST(request: Request) {
   const t0 = performance.now();
@@ -39,159 +17,92 @@ export async function POST(request: Request) {
     const parsedReq = await readCsvFromRequest(request);
     if (parsedReq instanceof NextResponse) return parsedReq;
 
-    const { csvContent, targetRole = 'Full Stack Engineer', senderName, extractedCandidate } = parsedReq;
+    const {
+      csvContent,
+      targetRole = 'Full Stack Engineer',
+      senderName,
+      extractedCandidate,
+      archiveRequestedAt,
+      archiveReceivedAt
+    } = parsedReq;
 
-    // ---- 1. Parse (single pass) ----
-    const rows = parseCSV(csvContent);
-    const t1 = performance.now();
-
-    if (rows.length < 2) {
-      return NextResponse.json({ success: false, error: 'CSV file contains no records' }, { status: 400 });
+    // Requirement 12: Strictly authenticate Supabase user and reject unauthenticated requests with 401
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { success: false, error: 'Service Unavailable: Supabase is not configured' },
+        { status: 503 }
+      );
     }
 
-    // LinkedIn exports start with a "Notes:" preamble; find the real header row.
-    let headerIdx = 0;
-    for (let i = 0; i < Math.min(rows.length, 25); i++) {
-      const lower = rows[i].join(',').toLowerCase();
-      if ((lower.includes('first name') || lower.includes('url')) &&
-          (lower.includes('company') || lower.includes('position') || lower.includes('title'))) {
-        headerIdx = i;
-        break;
+    const auth = await authenticateApiRequest(request);
+    if (!auth) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Missing, invalid or expired session' },
+        { status: 401 }
+      );
+    }
+
+    // Canonical identity strictly from Supabase Auth UUID (never from body/params).
+    // `db` is bound to this user's JWT so RLS evaluates auth.uid() = userId.
+    const userId = auth.user.id;
+    const db = auth.client;
+
+    let previousBoundaryDate: string | null = null;
+    const latestImport = await getLatestImport(userId, db);
+    if (latestImport) {
+      previousBoundaryDate = latestImport.archive_requested_at || latestImport.imported_at;
+    }
+    const existingStatusLookup = (urls: string[]) =>
+      fetchExistingConnectionStatuses(userId, urls, db);
+
+    // Run two-layer incremental import pipeline
+    const pipelineResult = await runIncrementalImportPipeline({
+      csvContent,
+      targetRole,
+      extractedSkills: extractedCandidate?.skills || [],
+      previousBoundaryDate,
+      existingStatusLookup,
+      userId
+    });
+
+    // Persist new connections with user_id = authenticated user UUID
+    let returnedProspects = pipelineResult.genuinelyNewProspects;
+    if (pipelineResult.connectionRowsToInsert.length > 0) {
+      const { rows } = await insertNewConnections(userId, pipelineResult.connectionRowsToInsert, db);
+      if (rows.length > 0) {
+        const { connectionRowToProspect } = await import('@/lib/supabaseDb');
+        returnedProspects = rows.map(connectionRowToProspect);
       }
     }
 
-    const col = buildColumnMap(rows[headerIdx].map((h) => h.toLowerCase().trim()));
-    const get = (cols: string[], key: string) => (col[key] >= 0 ? (cols[col[key]] || '').trim() : '');
+    // Record import record private to this authenticated user
+    await recordImport(userId, {
+      archive_requested_at: archiveRequestedAt,
+      archive_received_at: archiveReceivedAt,
+      total_rows: pipelineResult.totalRows,
+      candidate_rows: pipelineResult.candidateRowsCount,
+      new_connections: pipelineResult.newConnectionsCount
+    }, db);
 
-    // ---- 2. Enrich: classify + score (no DM generation; that happens when a prospect is opened) ----
-    const now = new Date().toISOString();
-    const batch = Date.now().toString(36);
-    const classifyCache = new Map<string, ClassificationResult>();
-    const scoreCache = new Map<string, ScoreExplanation>();
-    const seen = new Set<string>();
-
-    let skippedStudents = 0;
-    let skippedDuplicates = 0;
-    const keyed: { p: Prospect; hasContact: number; score: number }[] = [];
-
-    for (let i = headerIdx + 1; i < rows.length; i++) {
-      const cols = rows[i];
-
-      const first = get(cols, 'firstName');
-      const last = get(cols, 'lastName');
-      const fullName = first || last
-        ? `${first} ${last === '.' || last === '-' ? '' : last}`.trim()
-        : get(cols, 'fullName');
-
-      // Skip blank/deleted connection rows
-      if (!fullName || fullName.length < 2) continue;
-
-      const jobTitle = get(cols, 'position') || 'Professional';
-      const notes = get(cols, 'notes');
-
-      // Interns, students and freshers can't hire or refer, so leave them out
-      if (isStudentOrIntern(jobTitle, notes)) {
-        skippedStudents++;
-        continue;
-      }
-
-      const company = get(cols, 'company') || 'Self-employed';
-      const rawUrl = get(cols, 'url');
-      const dedupeKey = rawUrl
-        ? rawUrl.toLowerCase().replace(/\/+$/, '')
-        : `${fullName.toLowerCase()}|${company.toLowerCase()}`;
-      if (seen.has(dedupeKey)) {
-        skippedDuplicates++;
-        continue;
-      }
-      seen.add(dedupeKey);
-
-      const linkedinUrl = rawUrl ||
-        `https://linkedin.com/search/results/all/?keywords=${encodeURIComponent(fullName + ' ' + company)}`;
-      const email = get(cols, 'email') || undefined;
-      const phoneNumber = get(cols, 'phone') || undefined;
-      const location = get(cols, 'location') || 'Remote';
-
-      // Memoized: thousands of connections share titles like "Software Engineer"
-      const classKey = `${jobTitle}|${notes}`.toLowerCase();
-      let cls = classifyCache.get(classKey);
-      if (!cls) {
-        cls = classifyProspectTitle(jobTitle, notes);
-        classifyCache.set(classKey, cls);
-      }
-
-      const hiring = /hiring/i.test(jobTitle) || /hiring/i.test(notes);
-
-      const prospect: Prospect = {
-        id: `p-${batch}-${i}`,
-        name: fullName,
-        jobTitle,
-        company,
-        location,
-        linkedinUrl,
-        email,
-        phoneNumber,
-        connectedOn: get(cols, 'connectedOn') || undefined,
-        segregationGroup: cls.segregationGroup,
-        notes,
-        classification: cls.classification,
-        relationshipType: cls.relationshipType,
-        category: classifyTitle(jobTitle),
-        status: 'Not contacted',
-        createdAt: now,
-        updatedAt: now,
-        jobOpportunity: {
-          id: `j-${batch}-${i}`,
-          title: targetRole,
-          company,
-          location,
-          remoteStatus: 'Remote India',
-          description: `${cls.segregationGroup} contact at ${company} for ${targetRole}`,
-          source: 'LinkedIn CSV Import',
-          hiringSignals: hiring ? ['Hiring Lead'] : [],
-          requiredSkills: extractedCandidate?.skills || []
-        }
-      };
-
-      // Memoized on every input the scorer actually reads
-      const scoreKey = `${classKey}|${company}|${location}|${cls.classification}|${hiring}`.toLowerCase();
-      let score = scoreCache.get(scoreKey);
-      if (!score) {
-        score = calculateScoreAndMatching(prospect, prospect.jobOpportunity);
-        scoreCache.set(scoreKey, score);
-      }
-      prospect.score = score;
-
-      keyed.push({ p: prospect, hasContact: email || phoneNumber ? 1 : 0, score: score.totalScore });
-    }
-    const t2 = performance.now();
-
-    // ---- 3. Sort with precomputed keys: highest match score first (descending), then contactable ----
-    keyed.sort((a, b) => b.score - a.score || b.hasContact - a.hasContact);
-    const prospects = keyed.map((k) => k.p);
-    const t3 = performance.now();
-
-    const timingsMs = {
-      parse: Math.round(t1 - t0),
-      enrich: Math.round(t2 - t1),
-      sort: Math.round(t3 - t2),
-      total: Math.round(t3 - t0)
-    };
+    const tTotal = Math.round(performance.now() - t0);
     console.log(
-      `[import-csv] ${prospects.length} prospects, ${skippedStudents} students/interns skipped, ` +
-      `${skippedDuplicates} duplicates skipped, ${classifyCache.size} unique titles`,
-      timingsMs
+      `[import-csv] User ${userId.slice(0, 8)}... completed in ${tTotal}ms. Total: ${pipelineResult.totalRows}, ` +
+      `Candidates: ${pipelineResult.candidateRowsCount}, Genuinely New: ${pipelineResult.newConnectionsCount}, ` +
+      `Skipped Terminal: ${pipelineResult.skippedTerminalCount}, Skipped Existing: ${pipelineResult.skippedExistingNewCount}`
     );
 
     return NextResponse.json({
       success: true,
-      count: prospects.length,
-      skippedStudents,
-      skippedDuplicates,
-      prospects,
+      count: pipelineResult.newConnectionsCount,
+      totalRows: pipelineResult.totalRows,
+      candidateRows: pipelineResult.candidateRowsCount,
+      skippedStudents: pipelineResult.skippedStudents,
+      skippedDuplicates: pipelineResult.skippedExistingNewCount + pipelineResult.skippedTerminalCount,
+      skippedTerminal: pipelineResult.skippedTerminalCount,
+      prospects: returnedProspects,
       senderName,
       extractedCandidate,
-      timingsMs
+      timingsMs: { total: tTotal }
     });
   } catch (error) {
     console.error('API /import-csv error:', error);
@@ -205,6 +116,8 @@ async function readCsvFromRequest(request: Request): Promise<{
   targetRole?: string;
   workflow?: string;
   senderName?: string;
+  archiveRequestedAt?: string;
+  archiveReceivedAt?: string;
   extractedCandidate?: {
     name: string | null;
     targetRole: string | null;
@@ -221,6 +134,8 @@ async function readCsvFromRequest(request: Request): Promise<{
     const targetRole = (form.get('targetRole') as string) || undefined;
     const workflow = (form.get('workflow') as string) || undefined;
     let senderName = (form.get('senderName') as string) || undefined;
+    const archiveRequestedAt = (form.get('archiveRequestedAt') as string) || undefined;
+    const archiveReceivedAt = (form.get('archiveReceivedAt') as string) || undefined;
     const resumeFile = form.get('resumeFile') as File | null;
     let extractedCandidate: { name: string | null; targetRole: string | null; skills: string[] } | undefined;
 
@@ -247,67 +162,36 @@ async function readCsvFromRequest(request: Request): Promise<{
       }
     }
 
-    return { csvContent, targetRole, workflow, senderName, extractedCandidate };
+    return {
+      csvContent,
+      targetRole,
+      workflow,
+      senderName,
+      archiveRequestedAt,
+      archiveReceivedAt,
+      extractedCandidate
+    };
   }
 
   const json = await request.json();
-  const { csvContent, targetRole, workflow, senderName } = json || {};
+  const {
+    csvContent,
+    targetRole,
+    workflow,
+    senderName,
+    archiveRequestedAt,
+    archiveReceivedAt
+  } = json || {};
   if (!csvContent || typeof csvContent !== 'string') {
     return NextResponse.json({ success: false, error: 'Valid CSV content is required' }, { status: 400 });
   }
   if (csvContent.length > MAX_FILE_BYTES) return tooLarge();
-  return { csvContent, targetRole, workflow, senderName };
-}
-
-function buildColumnMap(headers: string[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const [key, names] of Object.entries(ALIASES)) {
-    map[key] = headers.findIndex((h) => names.includes(h));
-  }
-  for (const [key, re] of Object.entries(FUZZY)) {
-    if (map[key] === -1) map[key] = headers.findIndex((h) => re.test(h));
-  }
-  return map;
-}
-
-/**
- * Single-pass CSV parser. Handles quoted fields, escaped quotes ("") and
- * line breaks inside quotes, which a split('\n') approach gets wrong.
- */
-function parseCSV(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  const start = text.charCodeAt(0) === 0xfeff ? 1 : 0; // strip BOM
-
-  for (let i = start; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    if (inQuotes) {
-      if (c === 34) {
-        if (text.charCodeAt(i + 1) === 34) { field += '"'; i++; }
-        else inQuotes = false;
-      } else {
-        field += text[i];
-      }
-    } else if (c === 34) {
-      inQuotes = true;
-    } else if (c === 44) {
-      row.push(field.trim());
-      field = '';
-    } else if (c === 10 || c === 13) {
-      if (c === 13 && text.charCodeAt(i + 1) === 10) i++;
-      row.push(field.trim());
-      field = '';
-      if (row.length > 1 || row[0] !== '') rows.push(row);
-      row = [];
-    } else {
-      field += text[i];
-    }
-  }
-  if (field || row.length) {
-    row.push(field.trim());
-    if (row.length > 1 || row[0] !== '') rows.push(row);
-  }
-  return rows;
+  return {
+    csvContent,
+    targetRole,
+    workflow,
+    senderName,
+    archiveRequestedAt,
+    archiveReceivedAt
+  };
 }

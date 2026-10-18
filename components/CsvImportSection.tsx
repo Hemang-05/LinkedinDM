@@ -40,9 +40,16 @@ Vikram,Mehta,Nexus Scale,CTO,https://linkedin.com/in/vikram-mehta,Remote India,"
     setSuccessCount(null);
 
     try {
+      const { getSupabaseAccessToken } = await import('@/lib/supabaseClient');
+      const token = await getSupabaseAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch('/api/import-csv', { method: 'POST', body: form });
+      const res = await fetch('/api/import-csv', { method: 'POST', body: form, headers });
 
       const data = await res.json();
       if (data.success) {

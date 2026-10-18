@@ -2,15 +2,58 @@ import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile, OutreachGoal, 
 import { INITIAL_PROSPECTS } from './sampleData';
 import { EMPTY_PROFILE } from './profile';
 
-const PROSPECTS_STORAGE_KEY = 'directmessage_prospects_v2';
-const OUTREACH_STORAGE_KEY = 'directmessage_outreach_v2';
-const PROFILE_STORAGE_KEY = 'directmessage_user_profile_v3';
+let activeStorageUserId: string | null = null;
 
-export function getClientProspects(): Prospect[] {
+export function setActiveStorageUser(userId: string | null): void {
+  activeStorageUserId = userId;
+}
+
+export function getActiveStorageUser(): string | null {
+  return activeStorageUserId;
+}
+
+function resolveKey(base: string, explicitUserId?: string): string {
+  const uid = explicitUserId || activeStorageUserId;
+  return uid ? `dm_u_${uid}_${base}` : `directmessage_${base}_v2`;
+}
+
+export function clearUserCache(userId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(`dm_u_${userId}_prospects`);
+    localStorage.removeItem(`dm_u_${userId}_outreach`);
+    localStorage.removeItem(`dm_u_${userId}_profile`);
+    localStorage.removeItem(`dm_u_${userId}_session`);
+  } catch {}
+}
+
+export function getLegacyUnmigratedProspects(): Prospect[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('directmessage_prospects_v2');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearLegacyStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('directmessage_prospects_v2');
+    localStorage.removeItem('directmessage_outreach_v2');
+    localStorage.removeItem('directmessage_user_profile_v3');
+  } catch {}
+}
+
+export function getClientProspects(userId?: string): Prospect[] {
   if (typeof window === 'undefined') return [];
 
   try {
-    const data = localStorage.getItem(PROSPECTS_STORAGE_KEY);
+    const key = resolveKey('prospects', userId);
+    const data = localStorage.getItem(key);
     if (!data) return [];
     const parsed = JSON.parse(data);
     return Array.isArray(parsed) ? parsed : [];
@@ -20,10 +63,11 @@ export function getClientProspects(): Prospect[] {
   }
 }
 
-export function saveClientProspects(prospects: Prospect[]): void {
+export function saveClientProspects(prospects: Prospect[], userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(PROSPECTS_STORAGE_KEY, JSON.stringify(prospects));
+    const key = resolveKey('prospects', userId);
+    localStorage.setItem(key, JSON.stringify(prospects));
     import('./clientDb')
       .then(({ saveProspects }) => {
         saveProspects(prospects);
@@ -38,9 +82,11 @@ export function updateClientProspect(
   id: string,
   newStatus: OutreachStatus,
   updatedMessage?: string,
-  notRelevantReason?: NotRelevantReason
+  notRelevantReason?: NotRelevantReason,
+  userId?: string
 ): Prospect | null {
-  const list = getClientProspects();
+  const effectiveUserId = userId || activeStorageUserId;
+  const list = getClientProspects(effectiveUserId || undefined);
   const idx = list.findIndex((p) => p.id === id);
   if (idx === -1) return null;
 
@@ -57,12 +103,33 @@ export function updateClientProspect(
     list[idx].lastContactedDate = now.split('T')[0];
   }
 
-  saveClientProspects(list);
+  saveClientProspects(list, effectiveUserId || undefined);
 
   if (typeof window !== 'undefined') {
+    // 1. Maintain IndexedDB cache
     import('./clientDb')
       .then(({ updateProspectStatusInDb }) => {
         updateProspectStatusInDb(id, newStatus, updatedMessage);
+      })
+      .catch(() => {});
+
+    // 2. Persist state to Supabase PostgreSQL (Source of Truth)
+    import('./supabaseClient')
+      .then(({ getCurrentSupabaseUser }) => {
+        getCurrentSupabaseUser().then((user) => {
+          if (!user) return;
+          import('./supabaseDb').then(({ markConnectionContacted, markConnectionSkipped }) => {
+            if (newStatus === 'Contacted') {
+              markConnectionContacted(user.id, id, {
+                initialMessage: list[idx].draftedMessage,
+                followUpDay5: list[idx].followUpDay5Message,
+                followUpDay12: list[idx].followUpDay12Message
+              });
+            } else if (newStatus === 'not_relevant') {
+              markConnectionSkipped(user.id, id);
+            }
+          });
+        });
       })
       .catch(() => {});
   }
@@ -77,11 +144,12 @@ export function addClientProspect(prospect: Prospect): Prospect {
   return prospect;
 }
 
-export function getClientOutreachLogs(): OutreachLogEntry[] {
+export function getClientOutreachLogs(userId?: string): OutreachLogEntry[] {
   if (typeof window === 'undefined') return [];
 
   try {
-    const data = localStorage.getItem(OUTREACH_STORAGE_KEY);
+    const key = resolveKey('outreach', userId);
+    const data = localStorage.getItem(key);
     if (!data) return [];
     const parsed = JSON.parse(data);
     return Array.isArray(parsed) ? parsed : [];
@@ -91,10 +159,11 @@ export function getClientOutreachLogs(): OutreachLogEntry[] {
   }
 }
 
-export function saveClientOutreachLogs(logs: OutreachLogEntry[]): void {
+export function saveClientOutreachLogs(logs: OutreachLogEntry[], userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(OUTREACH_STORAGE_KEY, JSON.stringify(logs));
+    const key = resolveKey('outreach', userId);
+    localStorage.setItem(key, JSON.stringify(logs));
   } catch (err) {
     console.error('Failed to save outreach logs to localStorage:', err);
   }
@@ -105,8 +174,7 @@ export function isProfileComplete(profile: UserProfile | null | undefined, goal:
   const hasName = Boolean(profile.name && profile.name.trim().length > 0 && profile.name.trim() !== 'Your Name');
   const hasRole = Boolean((profile.targetRole && profile.targetRole.trim()) || (profile.title && profile.title.trim()));
   const hasSkills = Array.isArray(profile.skills) && profile.skills.length > 0;
-  const hasExp = typeof profile.yearsOfExperience === 'number' && !isNaN(profile.yearsOfExperience) && profile.yearsOfExperience >= 0;
-  if (!hasName || !hasRole || !hasSkills || !hasExp) return false;
+  if (!hasName || !hasRole) return false;
   if (goal === 'agency-leads') {
     const hasAgencySummary = Boolean(profile.agencyServiceSummary && profile.agencyServiceSummary.trim());
     const hasAgencyOffering = Boolean(profile.agencyOffering && profile.agencyOffering.trim());
@@ -115,11 +183,12 @@ export function isProfileComplete(profile: UserProfile | null | undefined, goal:
   return true;
 }
 
-export function getClientProfile(): UserProfile | null {
+export function getClientProfile(userId?: string): UserProfile | null {
   if (typeof window === 'undefined') return null;
 
   try {
-    const data = localStorage.getItem(PROFILE_STORAGE_KEY);
+    const key = resolveKey('profile', userId);
+    const data = localStorage.getItem(key);
     if (!data) return null;
     const parsed = JSON.parse(data);
     if (!parsed || typeof parsed !== 'object') return null;
@@ -134,10 +203,25 @@ export function getClientProfile(): UserProfile | null {
   }
 }
 
-export function saveClientProfile(profile: UserProfile): void {
+export function saveClientProfile(profile: UserProfile, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    const effectiveUserId = userId || activeStorageUserId;
+    const key = resolveKey('profile', effectiveUserId || undefined);
+    localStorage.setItem(key, JSON.stringify(profile));
+
+    // Sync profile to Supabase if authenticated
+    import('./supabaseClient')
+      .then(({ getCurrentSupabaseUser }) => {
+        getCurrentSupabaseUser().then((user) => {
+          const targetUid = user?.id || effectiveUserId;
+          if (!targetUid) return;
+          import('./supabaseDb').then(({ saveSupabaseProfile }) => {
+            saveSupabaseProfile(targetUid, profile, user?.email);
+          });
+        });
+      })
+      .catch(() => {});
   } catch (err) {
     console.error('Failed to save profile to localStorage:', err);
   }
@@ -269,10 +353,11 @@ export interface ClientSession {
 
 const SESSION_STORAGE_KEY = 'directmessage_ui_session_v1';
 
-export function getClientSession(): ClientSession | null {
+export function getClientSession(userId?: string): ClientSession | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    const key = resolveKey('session', userId);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -280,23 +365,25 @@ export function getClientSession(): ClientSession | null {
   }
 }
 
-export function saveClientSession(session: Partial<ClientSession>): void {
+export function saveClientSession(session: Partial<ClientSession>, userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    const existing = getClientSession() || {
+    const key = resolveKey('session', userId);
+    const existing = getClientSession(userId) || {
       selectedWorkflow: null,
       workflowStep: 'upload'
     };
     const updated = { ...existing, ...session };
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(key, JSON.stringify(updated));
   } catch (err) {
     console.error('Failed to save session to localStorage:', err);
   }
 }
 
-export function clearClientSession(): void {
+export function clearClientSession(userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    const key = resolveKey('session', userId);
+    localStorage.removeItem(key);
   } catch {}
 }

@@ -63,3 +63,6 @@ export async function copyAndOpenLinkedIn(
   return await copyTextToClipboard(text);
 }
 
+export const copyToClipboard = copyTextToClipboard;
+
+

@@ -261,7 +261,23 @@ export function WorkflowView({
       if (currentProf.name) form.append('senderName', currentProf.name);
       if (secondaryFile) form.append('resumeFile', secondaryFile);
 
-      const res = await fetch('/api/import-csv', { method: 'POST', body: form });
+      const headers: Record<string, string> = {};
+      try {
+        const { getSupabaseClient } = await import('@/lib/supabaseClient');
+        const client = getSupabaseClient();
+        if (client) {
+          const { data: { session } } = await client.auth.getSession();
+          if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`;
+          }
+        }
+      } catch {}
+
+      const res = await fetch('/api/import-csv', {
+        method: 'POST',
+        body: form,
+        headers
+      });
 
       const data = await res.json();
       if (data.success) {

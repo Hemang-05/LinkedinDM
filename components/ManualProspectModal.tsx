@@ -34,9 +34,16 @@ export function ManualProspectModal({ isOpen, onClose, onProspectAdded }: Manual
     setError('');
 
     try {
+      const { getSupabaseAccessToken } = await import('@/lib/supabaseClient');
+      const token = await getSupabaseAccessToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/prospects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: name.trim(),
           jobTitle: jobTitle.trim() || 'Founder',

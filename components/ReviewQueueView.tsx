@@ -43,6 +43,8 @@ interface ReviewQueueViewProps {
   workflow: OutreachGoal;
   onProspectUpdated: (updated: Prospect) => void;
   onSwitchToList: () => void;
+  userProfile?: UserProfile | null;
+  onOpenSettings?: () => void;
 }
 
 interface UndoAction {
@@ -68,7 +70,9 @@ export function ReviewQueueView({
   prospects,
   workflow,
   onProspectUpdated,
-  onSwitchToList
+  onSwitchToList,
+  userProfile: propProfile,
+  onOpenSettings
 }: ReviewQueueViewProps) {
   const [selectedCategory, setSelectedCategory] = useState<'all' | ProspectCategory>('all');
   const [includeOther, setIncludeOther] = useState<boolean>(false);
@@ -113,7 +117,26 @@ export function ReviewQueueView({
   }, [prospects, selectedCategory, includeOther]);
 
   const currentProspect: Prospect | undefined = activeQueue[currentIndex];
-  const userProfile: UserProfile | null = getClientProfile();
+  const rawProfile: UserProfile | null = propProfile || getClientProfile();
+
+  const userProfile: UserProfile | null = useMemo(() => {
+    if (!rawProfile) return null;
+    const name = rawProfile.name?.trim();
+    if (!name || name === 'Your Name') return null;
+
+    return {
+      ...rawProfile,
+      name,
+      targetRole: rawProfile.targetRole || rawProfile.title || 'Software Engineer',
+      skills: (rawProfile.skills && rawProfile.skills.length > 0) ? rawProfile.skills : ['React', 'TypeScript', 'Node.js'],
+      primarySkills: (rawProfile.primarySkills && rawProfile.primarySkills.length > 0)
+        ? rawProfile.primarySkills
+        : (rawProfile.skills && rawProfile.skills.length > 0)
+        ? rawProfile.skills.slice(0, 5)
+        : ['React', 'TypeScript', 'Node.js'],
+      background: rawProfile.background || rawProfile.bioSummary || rawProfile.title || 'software engineering'
+    };
+  }, [rawProfile]);
 
   // Reset custom controls whenever active card changes
   useEffect(() => {
@@ -131,7 +154,7 @@ export function ReviewQueueView({
     const generateAndCache = (p: Prospect) => {
       if (!sequenceCache[p.id]) {
         try {
-          const targetRole = userProfile.targetRole || p.jobOpportunity?.title || 'Software Engineer';
+          const targetRole = userProfile.targetRole || userProfile.title || p.jobOpportunity?.title || 'Software Engineer';
           const seq = generatePersonalizedDM(
             p,
             targetRole,
@@ -485,29 +508,36 @@ export function ReviewQueueView({
       ) : (
         <div className="bg-white border border-[#E0DFDC] rounded-2xl shadow-sm overflow-hidden divide-y divide-zinc-100 transition-all">
           {/* Progress Bar & Counter */}
-          <div className="bg-zinc-50/70 px-6 py-2.5 flex items-center justify-between text-xs text-zinc-600 font-medium">
+          <div className="bg-zinc-50/70 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600 font-medium">
             <div className="flex items-center gap-2">
               <span className="font-bold text-zinc-900">
                 Card {currentIndex + 1} of {activeQueue.length}
               </span>
               <span className="text-zinc-400">·</span>
               <span className="text-[11px] text-zinc-500">
-                {activeQueue.length} remaining in queue
+                {activeQueue.length} remaining
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-24 bg-zinc-200 h-1.5 rounded-full overflow-hidden">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>{prospects.filter(p => p.status === 'Contacted').length} Contacted</span>
+                </span>
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  <XCircle className="w-3 h-3 text-amber-600" />
+                  <span>{prospects.filter(p => p.status === 'not_relevant').length} Skipped</span>
+                </span>
+              </div>
+              <div className="w-20 bg-zinc-200 h-1.5 rounded-full overflow-hidden hidden sm:block">
                 <div
                   className="bg-[#0A66C2] h-full transition-all duration-300"
                   style={{
-                    width: `${Math.min(100, Math.round(((currentIndex + 1) / activeQueue.length) * 100))}%`
+                    width: `${Math.min(100, Math.round(((currentIndex + 1) / Math.max(activeQueue.length, 1)) * 100))}%`
                   }}
                 />
               </div>
-              <span className="text-[10px] text-zinc-400 font-semibold">
-                {Math.round(((currentIndex + 1) / activeQueue.length) * 100)}%
-              </span>
             </div>
           </div>
 
@@ -601,7 +631,25 @@ export function ReviewQueueView({
 
               <div className="relative">
                 <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl text-xs sm:text-sm text-zinc-800 leading-relaxed font-sans whitespace-pre-wrap select-all font-normal">
-                  {currentSequence ? currentSequence.day0 : 'Generating tailored direct message...'}
+                  {currentSequence ? (
+                    currentSequence.day0
+                  ) : (
+                    <div className="text-amber-800 space-y-2 py-1">
+                      <p className="font-semibold text-xs text-amber-900">Profile Setup Required</p>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        To generate tailored outreach direct messages, please open Settings and enter your Name and Target Role.
+                      </p>
+                      {onOpenSettings && (
+                        <button
+                          type="button"
+                          onClick={onOpenSettings}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0A66C2] hover:bg-[#004182] text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Open Settings
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,22 +1,24 @@
 'use client';
 
 import React from 'react';
-import { Home, Users, Briefcase, Send, Settings } from 'lucide-react';
+import { Home, Users, Briefcase, Send, Settings, CalendarClock } from 'lucide-react';
 
-export type NavTab = 'home' | 'prospects' | 'jobs' | 'outreach' | 'settings';
+export type NavTab = 'home' | 'prospects' | 'jobs' | 'outreach' | 'followups' | 'settings';
 
 interface BottomNavProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   pendingReviewCount?: number;
   contactedCount?: number;
+  dueFollowUpsCount?: number;
 }
 
 export function BottomNav({
   currentTab,
   onTabChange,
   pendingReviewCount = 0,
-  contactedCount = 0
+  contactedCount = 0,
+  dueFollowUpsCount = 0
 }: BottomNavProps) {
   const tabs = [
     {
@@ -31,9 +33,10 @@ export function BottomNav({
       icon: Users
     },
     {
-      id: 'jobs' as NavTab,
-      label: 'Jobs',
-      icon: Briefcase
+      id: 'followups' as NavTab,
+      label: 'Follow-ups',
+      icon: CalendarClock,
+      badge: dueFollowUpsCount > 0 ? dueFollowUpsCount : undefined
     },
     {
       id: 'outreach' as NavTab,
@@ -43,7 +46,7 @@ export function BottomNav({
     },
     {
       id: 'settings' as NavTab,
-      label: 'Settings',
+      label: 'Profile',
       icon: Settings
     }
   ];
