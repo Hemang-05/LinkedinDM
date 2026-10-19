@@ -160,16 +160,26 @@ export function getClientOutreachLogs(userId?: string): OutreachLogEntry[] {
     const parsed = JSON.parse(data);
     if (!Array.isArray(parsed)) return [];
 
-    // Deduplicate entries by normalized LinkedIn URL or name|company
-    const seen = new Set<string>();
+    // Deduplicate entries by normalized LinkedIn URL AND by name|company
+    const seenUrls = new Set<string>();
+    const seenNames = new Set<string>();
     const deduplicated: OutreachLogEntry[] = [];
+
     for (const entry of parsed) {
       const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
-      const itemKey = (cleanUrl && cleanUrl.includes('linkedin.com/in/') && cleanUrl.length > 'https://www.linkedin.com/in/'.length)
+      const normUrl = (cleanUrl && cleanUrl.includes('linkedin.com/in/') && cleanUrl.length > 'https://www.linkedin.com/in/'.length)
         ? cleanUrl
-        : `${entry.name?.trim().toLowerCase()}|${entry.company?.trim().toLowerCase()}`;
-      if (!seen.has(itemKey)) {
-        seen.add(itemKey);
+        : '';
+      const cleanName = entry.name?.trim().toLowerCase() || '';
+      const cleanCompany = entry.company?.trim().toLowerCase() || '';
+      const nameKey = cleanName.length > 1 ? `${cleanName}|${cleanCompany}` : '';
+
+      const isUrlDuplicate = normUrl ? seenUrls.has(normUrl) : false;
+      const isNameDuplicate = nameKey ? seenNames.has(nameKey) : false;
+
+      if (!isUrlDuplicate && !isNameDuplicate) {
+        if (normUrl) seenUrls.add(normUrl);
+        if (nameKey) seenNames.add(nameKey);
         deduplicated.push(entry);
       }
     }
@@ -257,8 +267,8 @@ export function checkClientDuplicate(
   const effectiveUserId = userId || activeStorageUserId;
   const logs = getClientOutreachLogs(effectiveUserId || undefined);
   const cleanUrl = linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
-  const cleanName = name?.trim().toLowerCase();
-  const cleanCompany = company?.trim().toLowerCase();
+  const cleanName = name?.trim().toLowerCase() || '';
+  const cleanCompany = company?.trim().toLowerCase() || '';
 
   for (const entry of logs) {
     const entryUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
@@ -273,11 +283,9 @@ export function checkClientDuplicate(
     }
     if (
       cleanName &&
-      cleanCompany &&
       cleanName.length > 1 &&
-      cleanCompany.length > 1 &&
-      entry.name.toLowerCase() === cleanName &&
-      entry.company.toLowerCase() === cleanCompany
+      entry.name?.trim().toLowerCase() === cleanName &&
+      (!cleanCompany || !entry.company || entry.company.trim().toLowerCase() === cleanCompany)
     ) {
       return { isDuplicate: true, existingEntry: entry };
     }
@@ -294,17 +302,17 @@ export function appendClientOutreachLog(entry: OutreachLogEntry, userId?: string
   const { isDuplicate } = checkClientDuplicate(entry.linkedinUrl, entry.name, entry.company, effectiveUserId || undefined);
   if (isDuplicate) {
     const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
-    const cleanName = entry.name?.trim().toLowerCase();
-    const cleanCompany = entry.company?.trim().toLowerCase();
+    const cleanName = entry.name?.trim().toLowerCase() || '';
+    const cleanCompany = entry.company?.trim().toLowerCase() || '';
 
     const updated = logs.map((existing) => {
       const existingUrl = existing.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
       const matchUrl = cleanUrl && existingUrl && cleanUrl === existingUrl;
       const matchName =
         cleanName &&
-        cleanCompany &&
-        existing.name.toLowerCase() === cleanName &&
-        existing.company.toLowerCase() === cleanCompany;
+        cleanName.length > 1 &&
+        existing.name?.trim().toLowerCase() === cleanName &&
+        (!cleanCompany || !existing.company || existing.company.trim().toLowerCase() === cleanCompany);
 
       if (matchUrl || matchName) {
         return { ...existing, ...entry, date: entry.date || existing.date };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Prospect,
   UserProfile,
@@ -123,7 +123,19 @@ export function ReviewQueueView({
       return cat === selectedCategory;
     });
 
-    // 2. Separate unskipped prospects and skipped prospects (skipped cards go to the back)
+    // 2. Deterministic stable sort: by score (desc), then connectedOn (desc), then id (asc)
+    // This ensures cards NEVER jump or flip order between re-renders or database fetches
+    pending.sort((a, b) => {
+      const scoreA = a.score?.totalScore ?? 0;
+      const scoreB = b.score?.totalScore ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const dateA = a.connectedOn || '';
+      const dateB = b.connectedOn || '';
+      if (dateB !== dateA) return dateB.localeCompare(dateA);
+      return a.id.localeCompare(b.id);
+    });
+
+    // 3. Separate unskipped prospects and skipped prospects (skipped cards go to the back)
     const skippedOrder = new Map<string, number>();
     skippedIds.forEach((id, idx) => skippedOrder.set(id, idx));
 
@@ -145,6 +157,10 @@ export function ReviewQueueView({
 
   // Current prospect is ALWAYS the head of the queue
   const currentProspect: Prospect | undefined = queue[0];
+  const currentProspectRef = useRef<Prospect | undefined>(currentProspect);
+  currentProspectRef.current = currentProspect;
+
+  const [actionToast, setActionToast] = useState<{ name: string; action: 'Contacted' | 'Skipped' | 'Not Relevant' } | null>(null);
   const rawProfile: UserProfile | null = propProfile || getClientProfile();
 
   const userProfile: UserProfile | null = useMemo(() => {
@@ -274,14 +290,14 @@ export function ReviewQueueView({
   }, [currentProspect]);
 
   // Action: Mark Contacted
-  const handleContacted = useCallback(() => {
-    if (!currentProspect || isHandlingRef.current) return;
+  const handleContacted = useCallback((explicitProspect?: Prospect) => {
+    const targetProspect = explicitProspect || currentProspectRef.current || currentProspect;
+    if (!targetProspect || isHandlingRef.current) return;
     isHandlingRef.current = true;
     setTimeout(() => {
       isHandlingRef.current = false;
     }, 200);
 
-    const targetProspect = currentProspect;
     const normUrl = normalizeLinkedInUrl(targetProspect.linkedinUrl, targetProspect.name, targetProspect.company);
 
     // 1. Push to undo stack
@@ -330,17 +346,20 @@ export function ReviewQueueView({
     };
     updateClientProspect(targetProspect.id, 'Contacted', currentSequence?.day0, undefined, userId);
     onProspectUpdated(updated);
+
+    setActionToast({ name: targetProspect.name, action: 'Contacted' });
+    setTimeout(() => setActionToast(null), 2500);
   }, [currentProspect, currentSequence, onProspectUpdated, userProfile, userId]);
 
   // Action: Mark Not Relevant
-  const handleMarkNotRelevant = useCallback((reason?: NotRelevantReason) => {
-    if (!currentProspect || isHandlingRef.current) return;
+  const handleMarkNotRelevant = useCallback((reason?: NotRelevantReason, explicitProspect?: Prospect) => {
+    const targetProspect = explicitProspect || currentProspectRef.current || currentProspect;
+    if (!targetProspect || isHandlingRef.current) return;
     isHandlingRef.current = true;
     setTimeout(() => {
       isHandlingRef.current = false;
     }, 200);
 
-    const targetProspect = currentProspect;
     const normUrl = normalizeLinkedInUrl(targetProspect.linkedinUrl, targetProspect.name, targetProspect.company);
 
     // 1. Push to undo stack
@@ -377,19 +396,22 @@ export function ReviewQueueView({
     onProspectUpdated(updated);
 
     setShowReasonPicker(false);
+    setActionToast({ name: targetProspect.name, action: 'Not Relevant' });
+    setTimeout(() => setActionToast(null), 2500);
   }, [currentProspect, onProspectUpdated, userId]);
 
   // Action: Skip (move to back of queue)
-  const handleSkip = useCallback(() => {
-    if (!currentProspect || queue.length <= 1) return;
+  const handleSkip = useCallback((explicitProspect?: Prospect) => {
+    const targetProspect = explicitProspect || currentProspectRef.current || currentProspect;
+    if (!targetProspect || queue.length <= 1) return;
 
-    const targetId = currentProspect.id;
+    const targetId = targetProspect.id;
     setUndoStack((prev) => [
       {
         type: 'skip',
         prospectId: targetId,
-        previousStatus: currentProspect.status,
-        originalProspect: currentProspect
+        previousStatus: targetProspect.status,
+        originalProspect: targetProspect
       },
       ...prev
     ]);
@@ -398,6 +420,9 @@ export function ReviewQueueView({
       const filtered = prev.filter((id) => id !== targetId);
       return [...filtered, targetId];
     });
+
+    setActionToast({ name: targetProspect.name, action: 'Skipped' });
+    setTimeout(() => setActionToast(null), 2000);
   }, [currentProspect, queue.length]);
 
   // Action: Undo last action
@@ -474,13 +499,13 @@ export function ReviewQueueView({
         handleCopyAndOpen();
       } else if (key === 'c') {
         e.preventDefault();
-        handleContacted();
+        handleContacted(currentProspectRef.current);
       } else if (key === 'n') {
         e.preventDefault();
         setShowReasonPicker((prev) => !prev);
       } else if (key === 's') {
         e.preventDefault();
-        handleSkip();
+        handleSkip(currentProspectRef.current);
       } else if (key === 'u') {
         e.preventDefault();
         handleUndo();
@@ -602,6 +627,17 @@ export function ReviewQueueView({
         </div>
       ) : (
         <div key={currentProspect.id} className="bg-white border border-[#E0DFDC] rounded-2xl shadow-sm overflow-hidden divide-y divide-zinc-100 transition-all">
+          {/* Action Confirmation Toast Banner */}
+          {actionToast && (
+            <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2 flex items-center justify-between text-xs text-emerald-800 font-semibold animate-in fade-in duration-150">
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Marked {actionToast.name} as {actionToast.action}</span>
+              </span>
+              <span className="text-[11px] text-emerald-600 font-normal">Next prospect ready</span>
+            </div>
+          )}
+
           {/* Progress Bar & Counter */}
           <div className="bg-zinc-50/70 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600 font-medium">
             <div className="flex items-center gap-2">
@@ -765,25 +801,25 @@ export function ReviewQueueView({
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <button
-                    onClick={() => handleMarkNotRelevant('wrong_company')}
+                    onClick={() => handleMarkNotRelevant('wrong_company', currentProspect)}
                     className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold cursor-pointer transition-colors"
                   >
                     Wrong Company
                   </button>
                   <button
-                    onClick={() => handleMarkNotRelevant('wrong_role')}
+                    onClick={() => handleMarkNotRelevant('wrong_role', currentProspect)}
                     className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold cursor-pointer transition-colors"
                   >
                     Wrong Role
                   </button>
                   <button
-                    onClick={() => handleMarkNotRelevant('not_hiring')}
+                    onClick={() => handleMarkNotRelevant('not_hiring', currentProspect)}
                     className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold cursor-pointer transition-colors"
                   >
                     Not Hiring
                   </button>
                   <button
-                    onClick={() => handleMarkNotRelevant('other')}
+                    onClick={() => handleMarkNotRelevant('other', currentProspect)}
                     className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold cursor-pointer transition-colors"
                   >
                     Other Reason
@@ -838,7 +874,10 @@ export function ReviewQueueView({
 
                 {/* 2. Contacted [C] */}
                 <button
-                  onClick={handleContacted}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    handleContacted(currentProspect);
+                  }}
                   className="inline-flex items-center gap-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
@@ -850,7 +889,10 @@ export function ReviewQueueView({
 
                 {/* 3. Not Relevant [N] */}
                 <button
-                  onClick={() => setShowReasonPicker((prev) => !prev)}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    setShowReasonPicker((prev) => !prev);
+                  }}
                   className="inline-flex items-center gap-2 text-xs font-bold bg-zinc-100 hover:bg-amber-100 text-zinc-700 hover:text-amber-800 border border-zinc-200 hover:border-amber-300 px-3 py-2.5 rounded-xl transition-colors cursor-pointer"
                 >
                   <XCircle className="w-3.5 h-3.5 text-zinc-500" />
@@ -862,7 +904,10 @@ export function ReviewQueueView({
 
                 {/* 4. Skip [S] */}
                 <button
-                  onClick={handleSkip}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    handleSkip(currentProspect);
+                  }}
                   className="inline-flex items-center gap-2 text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-2.5 rounded-xl border border-zinc-200 transition-colors cursor-pointer"
                 >
                   <SkipForward className="w-3.5 h-3.5 text-zinc-500" />

@@ -327,7 +327,9 @@ export async function getSupabaseConnections(
       .from('connections')
       .select('*')
       .eq('user_id', userId)
-      .order('score', { ascending: false, nullsFirst: false });
+      .order('score', { ascending: false, nullsFirst: false })
+      .order('connected_on', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true });
 
     if (filterStatus) {
       query = query.eq('status', filterStatus);

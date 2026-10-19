@@ -246,6 +246,7 @@ export default function Home() {
         setAuthLoading(false);
         return;
       }
+      currentUserIdRef.current = user.id;
       await loadUserData(user);
     };
 
