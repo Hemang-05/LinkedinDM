@@ -53,7 +53,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         type: 'signup',
         email: pendingVerificationEmail,
         options: {
-          emailRedirectTo: `${getSiteUrl()}`
+          emailRedirectTo: `${getSiteUrl()}/auth/confirm`
         }
       });
       if (error) throw error;
@@ -64,6 +64,52 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
       setIsResending(false);
     }
   };
+
+  // Active email verification listener:
+  // When isEmailVerificationPending is true, polls every 2.5s using the pre-filled credentials.
+  // The instant the user clicks the confirmation link on their phone or computer,
+  // this hook detects the confirmation, signs in silently, and logs the user straight into the workspace!
+  React.useEffect(() => {
+    if (!isEmailVerificationPending || !email.trim() || !password.trim()) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const client = getSupabaseClient();
+        if (!client) return;
+
+        const { data } = await client.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim()
+        });
+
+        if (!isMounted) return;
+
+        if (data?.session && data?.user) {
+          clearInterval(interval);
+          setIsEmailVerificationPending(false);
+          setSuccessMsg('Email verified! Opening your workspace...');
+          setActiveStorageUser(data.user.id);
+          await ensureSupabaseProfile(data.user.id, data.user.email);
+          const legacy = getLegacyUnmigratedProspects();
+          if (legacy.length > 0) {
+            await migrateLocalDataToSupabase(data.user.id, legacy);
+            clearLegacyStorage();
+          }
+          setTimeout(() => {
+            if (isMounted) onAuthSuccess(data.user);
+          }, 400);
+        }
+      } catch {
+        // Still awaiting email confirmation, silently continue polling
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isEmailVerificationPending, email, password, onAuthSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +147,7 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           email: email.trim(),
           password: password.trim(),
           options: {
-            emailRedirectTo: `${getSiteUrl()}`,
+            emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
             data: {
               name: fullName.trim(),
               target_role: targetRole.trim()
@@ -278,6 +324,10 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                     We sent a confirmation link to <span className="font-semibold text-blue-950">{pendingVerificationEmail || email}</span>.
                     Please check your inbox (and spam folder) and confirm your email.
                   </p>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-blue-800 text-[11px] font-medium bg-blue-100/70 py-1 px-2 rounded-md">
+                    <RotateCw className="w-3 h-3 text-[#0A66C2] animate-spin" />
+                    <span>Verifying on your phone? Once you tap the link, this screen will auto-detect it and log you in!</span>
+                  </div>
                 </div>
               </div>
 
@@ -418,10 +468,10 @@ export function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
                 <button
                   type="button"
                   disabled
-                  className="w-full py-2.5 px-4 bg-zinc-100 border border-zinc-200 text-zinc-400 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none"
+                  className="w-full py-2.5 px-4 bg-blue-50/60 border border-blue-200 text-blue-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none transition-all"
                 >
-                  <Mail className="w-4 h-4 text-zinc-400" />
-                  <span>Please confirm your email to sign in</span>
+                  <Loader2 className="w-4 h-4 text-[#0A66C2] animate-spin" />
+                  <span>Waiting for email verification... Auto-detecting</span>
                 </button>
 
                 <button

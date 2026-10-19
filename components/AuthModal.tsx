@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { getSupabaseClient, isSupabaseConfigured, getSiteUrl } from '@/lib/supabaseClient';
 import { getClientProspects } from '@/lib/clientStorage';
 import { migrateLocalDataToSupabase } from '@/lib/supabaseDb';
-import { X, Lock, Mail, Loader2, CheckCircle2, AlertCircle, Cloud, Send } from 'lucide-react';
+import { X, Lock, Mail, Loader2, CheckCircle2, AlertCircle, Cloud, Send, RotateCw } from 'lucide-react';
 import { DMLogo } from './DMLogo';
 
 interface AuthModalProps {
@@ -25,6 +25,59 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
   const [isResending, setIsResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Background auto-login poller: when email verification is pending,
+  // silently checks credentials every 2.5s. As soon as the user confirms via phone or another tab,
+  // it logs them in seamlessly and closes the modal!
+  React.useEffect(() => {
+    if (!isEmailVerificationPending || !email.trim() || !password.trim()) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const client = getSupabaseClient();
+        if (!client) return;
+
+        const { data } = await client.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim()
+        });
+
+        if (!isMounted) return;
+
+        if (data?.session && data?.user) {
+          clearInterval(interval);
+          setIsEmailVerificationPending(false);
+          setSuccessMsg('Email verified! Opening your workspace...');
+          const { setActiveStorageUser, getLegacyUnmigratedProspects, clearLegacyStorage } = await import('@/lib/clientStorage');
+          setActiveStorageUser(data.user.id);
+
+          const { ensureSupabaseProfile } = await import('@/lib/supabaseDb');
+          await ensureSupabaseProfile(data.user.id, data.user.email);
+
+          const legacyP = getLegacyUnmigratedProspects();
+          if (legacyP.length > 0) {
+            await migrateLocalDataToSupabase(data.user.id, legacyP);
+            clearLegacyStorage();
+          }
+
+          setTimeout(() => {
+            if (isMounted) {
+              if (onAuthSuccess) onAuthSuccess();
+              onClose();
+            }
+          }, 400);
+        }
+      } catch {
+        // Still awaiting email confirmation, continue polling
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isEmailVerificationPending, email, password, onAuthSuccess, onClose]);
+
   if (!isOpen) return null;
 
   const configured = isSupabaseConfigured();
@@ -40,7 +93,7 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
         type: 'signup',
         email: pendingVerificationEmail,
         options: {
-          emailRedirectTo: `${getSiteUrl()}`
+          emailRedirectTo: `${getSiteUrl()}/auth/confirm`
         }
       });
       if (error) throw error;
@@ -83,7 +136,7 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
           email: email.trim(),
           password: password.trim(),
           options: {
-            emailRedirectTo: `${getSiteUrl()}`
+            emailRedirectTo: `${getSiteUrl()}/auth/confirm`
           }
         });
 
@@ -235,6 +288,10 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
                     We sent a confirmation link to <span className="font-semibold text-blue-950">{pendingVerificationEmail || email}</span>.
                     Please check your inbox (and spam folder) and confirm your email.
                   </p>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-blue-800 text-[11px] font-medium bg-blue-100/70 py-1 px-2 rounded-md">
+                    <RotateCw className="w-3 h-3 text-[#0A66C2] animate-spin" />
+                    <span>Verifying on your phone? Once you tap the link, this screen will auto-detect it and log you in!</span>
+                  </div>
                 </div>
               </div>
 
@@ -333,10 +390,10 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
               <button
                 type="button"
                 disabled
-                className="w-full py-2.5 px-4 bg-zinc-100 border border-zinc-200 text-zinc-400 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none"
+                className="w-full py-2.5 px-4 bg-blue-50/60 border border-blue-200 text-blue-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-2 cursor-not-allowed select-none transition-all"
               >
-                <Mail className="w-4 h-4 text-zinc-400" />
-                <span>Please confirm your email to sign in</span>
+                <Loader2 className="w-4 h-4 text-[#0A66C2] animate-spin" />
+                <span>Waiting for email verification... Auto-detecting</span>
               </button>
 
               <button

@@ -196,6 +196,41 @@ export default function Home() {
 
     const initAuth = async () => {
       setAuthLoading(true);
+
+      const client = getSupabaseClient();
+      // Handle email verification redirect with PKCE auth code (?code=...) or Implicit hash tokens (#access_token=...)
+      if (client && typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        if (code) {
+          try {
+            const { data, error } = await client.auth.exchangeCodeForSession(code);
+            if (data?.session?.user) {
+              url.searchParams.delete('code');
+              window.history.replaceState({}, document.title, url.pathname + (url.searchParams.toString() ? `?${url.searchParams.toString()}` : ''));
+              await loadUserData(data.session.user);
+              return;
+            }
+          } catch (err) {
+            console.warn('[Supabase] Failed exchanging auth code for session:', err);
+          }
+        }
+
+        // Handle implicit flow hash tokens
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          try {
+            const { data: hashData } = await client.auth.getSession();
+            if (hashData?.session?.user) {
+              window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+              await loadUserData(hashData.session.user);
+              return;
+            }
+          } catch (err) {
+            console.warn('[Supabase] Failed restoring session from hash:', err);
+          }
+        }
+      }
+
       const user = await getCurrentSupabaseUser();
       if (!user) {
         setAuthUser(null);
@@ -214,9 +249,7 @@ export default function Home() {
     if (client) {
       const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
-          if (session.user.id !== authUser?.id) {
-            await loadUserData(session.user);
-          }
+          await loadUserData(session.user);
         } else if (event === 'SIGNED_OUT') {
           handleSignOutUser();
         }

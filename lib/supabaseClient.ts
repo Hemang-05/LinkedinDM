@@ -91,17 +91,18 @@ export async function getCurrentSupabaseUser(): Promise<User | null> {
   const client = getSupabaseClient();
   if (!client) return null;
   try {
+    // 1. Check active session first (fastest, immediately available from local storage or URL hash)
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (!sessionError && session?.user) {
+      return session.user;
+    }
+
+    // 2. Fall back to remote getUser() verification
     const { data: { user }, error: userError } = await client.auth.getUser();
     if (!userError && user) {
       return user;
     }
-    // If the server rejected the token or user was deleted, clear stale storage
-    if (userError) {
-      console.warn('[Supabase] Auth user verification failed, signing out:', userError.message);
-      try {
-        await client.auth.signOut();
-      } catch {}
-    }
+
     return null;
   } catch (err) {
     console.warn('[Supabase] Failed getting authenticated user:', err);
@@ -127,11 +128,26 @@ export async function getSupabaseAccessToken(): Promise<string | null> {
 
 /**
  * Resolves the canonical site URL for authentication redirects:
- * - Uses NEXT_PUBLIC_SITE_URL if defined
- * - Uses window.location.origin in client-side runtime
+ * - Checks NEXT_PUBLIC_SITE_URL if configured with a non-localhost URL (e.g., custom domain or LAN IP)
+ * - Checks NEXT_PUBLIC_VERCEL_URL for automated preview / production deployments
+ * - In client-side runtime, uses window.location.origin (unless localhost and explicit NEXT_PUBLIC_SITE_URL is given)
  * - Defaults to 'http://localhost:3000' in development and 'https://linkedindm.vercel.app' in production
  */
 export function getSiteUrl(): string {
+  // If explicitly configured with a non-localhost URL (e.g., Vercel, custom domain, or LAN IP like http://192.168.1.7:3000), prioritize it
+  if (process.env.NEXT_PUBLIC_SITE_URL && !process.env.NEXT_PUBLIC_SITE_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '');
+  }
+  // Vercel deployment preview / production environment variable
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL.replace(/\/+$/, '')}`;
+  }
+  // In client-side runtime, use the actual browser origin if it's not localhost (e.g., LAN IP or tunnel)
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    if (!window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
+      return window.location.origin;
+    }
+  }
   if (process.env.NEXT_PUBLIC_SITE_URL) {
     return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '');
   }
