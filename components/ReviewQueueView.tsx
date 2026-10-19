@@ -81,6 +81,11 @@ export function ReviewQueueView({
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
   const [copyFeedback, setCopyFeedback] = useState<'day0' | 'day5' | 'day12' | 'copied_and_opened' | null>(null);
 
+  // Set of handled prospect IDs in the current session (contacted or not_relevant).
+  // Prevents prospects from ever flashing or blinking back into the queue during background parent updates.
+  const handledIdsRef = React.useRef<Set<string>>(new Set());
+  const isHandlingRef = React.useRef<boolean>(false);
+
   // Collapsed "More" accordion state
   const [isMoreOpen, setIsMoreOpen] = useState<boolean>(false);
 
@@ -97,8 +102,9 @@ export function ReviewQueueView({
 
   // Sync active queue when prospects or selected category change
   useEffect(() => {
-    // Only pending prospects (not contacted, not marked not_relevant)
+    // Only pending prospects (not contacted, not marked not_relevant, and not handled in this session)
     const pending = prospects.filter((p) => {
+      if (handledIdsRef.current.has(p.id)) return false;
       const isPending = p.status !== 'Contacted' && p.status !== 'not_relevant';
       if (!isPending) return false;
       const cat = p.category || classifyTitle(p.jobTitle);
@@ -247,63 +253,84 @@ export function ReviewQueueView({
 
   // Action: Mark Contacted
   const handleContacted = useCallback(() => {
-    if (!currentProspect) return;
+    if (!currentProspect || isHandlingRef.current) return;
+    isHandlingRef.current = true;
+    setTimeout(() => {
+      isHandlingRef.current = false;
+    }, 200);
 
-    const previousStatus = currentProspect.status;
-    const previousDate = currentProspect.lastContactedDate;
+    const targetProspect = currentProspect;
+    handledIdsRef.current.add(targetProspect.id);
+
+    const previousStatus = targetProspect.status;
+    const previousDate = targetProspect.lastContactedDate;
 
     // Push to undo stack
     setUndoStack((prev) => [
       {
         type: 'contacted',
-        prospectId: currentProspect.id,
+        prospectId: targetProspect.id,
         previousStatus,
         previousContactedDate: previousDate,
-        originalProspect: currentProspect
+        originalProspect: targetProspect
       },
       ...prev
     ]);
 
-    // Save status
-    const updated = updateClientProspect(currentProspect.id, 'Contacted', currentSequence?.day0);
-    if (updated) {
-      onProspectUpdated(updated);
-    }
+    // Optimistically remove from activeQueue immediately so next prospect shows with zero delay
+    setActiveQueue((prev) => prev.filter((p) => p.id !== targetProspect.id));
 
-    // Log to outreach CRM
+    // Save status
+    const updated = updateClientProspect(targetProspect.id, 'Contacted', currentSequence?.day0);
+
+    // Log to outreach CRM before triggering parent update (so getClientOutreachLogs has fresh entry)
     appendClientOutreachLog({
       date: new Date().toISOString().split('T')[0],
-      name: currentProspect.name,
-      company: currentProspect.company,
-      role: userProfile?.targetRole || currentProspect.jobOpportunity?.title || 'Software Engineer',
-      personPosition: currentProspect.jobTitle,
-      relationshipType: currentProspect.relationshipType,
-      linkedinUrl: currentProspect.linkedinUrl,
+      name: targetProspect.name,
+      company: targetProspect.company,
+      role: userProfile?.targetRole || targetProspect.jobOpportunity?.title || 'Software Engineer',
+      personPosition: targetProspect.jobTitle,
+      relationshipType: targetProspect.relationshipType,
+      linkedinUrl: targetProspect.linkedinUrl,
       status: 'Contacted',
       notes: `Sent ${currentSequence?.persona || 'standard'} pitch via Review Queue`
     });
+
+    if (updated) {
+      onProspectUpdated(updated);
+    }
   }, [currentProspect, currentSequence, onProspectUpdated, userProfile]);
 
   // Action: Mark Not Relevant
   const handleMarkNotRelevant = useCallback((reason?: NotRelevantReason) => {
-    if (!currentProspect) return;
+    if (!currentProspect || isHandlingRef.current) return;
+    isHandlingRef.current = true;
+    setTimeout(() => {
+      isHandlingRef.current = false;
+    }, 200);
 
-    const previousStatus = currentProspect.status;
-    const previousReason = currentProspect.notRelevantReason;
+    const targetProspect = currentProspect;
+    handledIdsRef.current.add(targetProspect.id);
+
+    const previousStatus = targetProspect.status;
+    const previousReason = targetProspect.notRelevantReason;
 
     // Push to undo stack
     setUndoStack((prev) => [
       {
         type: 'not_relevant',
-        prospectId: currentProspect.id,
+        prospectId: targetProspect.id,
         previousStatus,
         previousReason,
-        originalProspect: currentProspect
+        originalProspect: targetProspect
       },
       ...prev
     ]);
 
-    const updated = updateClientProspect(currentProspect.id, 'not_relevant', undefined, reason);
+    // Optimistically remove from activeQueue immediately
+    setActiveQueue((prev) => prev.filter((p) => p.id !== targetProspect.id));
+
+    const updated = updateClientProspect(targetProspect.id, 'not_relevant', undefined, reason);
     if (updated) {
       onProspectUpdated(updated);
     }
@@ -338,6 +365,9 @@ export function ReviewQueueView({
     const [lastAction, ...remainingStack] = undoStack;
     setUndoStack(remainingStack);
 
+    // Remove from handledIdsRef so it can be viewed again
+    handledIdsRef.current.delete(lastAction.prospectId);
+
     if (lastAction.type === 'skip') {
       // Move last item of queue back to the front
       setActiveQueue((prev) => {
@@ -359,7 +389,9 @@ export function ReviewQueueView({
     if (reverted) {
       onProspectUpdated(reverted);
       // Put prospect back at head of current queue
-      setActiveQueue((prev) => [reverted, ...prev]);
+      setActiveQueue((prev) => [reverted, ...prev.filter((p) => p.id !== reverted.id)]);
+    } else if (lastAction.originalProspect) {
+      setActiveQueue((prev) => [lastAction.originalProspect!, ...prev.filter((p) => p.id !== lastAction.prospectId)]);
     }
   }, [undoStack, onProspectUpdated]);
 
@@ -406,14 +438,14 @@ export function ReviewQueueView({
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: 0 };
     for (const p of prospects) {
-      if (p.status !== 'Contacted' && p.status !== 'not_relevant') {
+      if (p.status !== 'Contacted' && p.status !== 'not_relevant' && !handledIdsRef.current.has(p.id)) {
         counts.all = (counts.all || 0) + 1;
         const cat = p.category || classifyTitle(p.jobTitle);
         counts[cat] = (counts[cat] || 0) + 1;
       }
     }
     return counts;
-  }, [prospects]);
+  }, [prospects, activeQueue.length]);
 
   const activeCategoryCount = categoryCounts[selectedCategory] || 0;
   const currentCategory: ProspectCategory = currentProspect

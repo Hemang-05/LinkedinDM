@@ -152,7 +152,22 @@ export function getClientOutreachLogs(userId?: string): OutreachLogEntry[] {
     const data = localStorage.getItem(key);
     if (!data) return [];
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    // Deduplicate entries by normalized LinkedIn URL or name|company
+    const seen = new Set<string>();
+    const deduplicated: OutreachLogEntry[] = [];
+    for (const entry of parsed) {
+      const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+      const itemKey = (cleanUrl && cleanUrl.includes('linkedin.com/in/'))
+        ? cleanUrl
+        : `${entry.name?.trim().toLowerCase()}|${entry.company?.trim().toLowerCase()}`;
+      if (!seen.has(itemKey)) {
+        seen.add(itemKey);
+        deduplicated.push(entry);
+      }
+    }
+    return deduplicated;
   } catch (err) {
     console.error('Failed to read outreach logs from localStorage:', err);
     return [];
@@ -230,9 +245,11 @@ export function saveClientProfile(profile: UserProfile, userId?: string): void {
 export function checkClientDuplicate(
   linkedinUrl: string,
   name: string,
-  company: string
+  company: string,
+  userId?: string
 ): { isDuplicate: boolean; existingEntry?: OutreachLogEntry } {
-  const logs = getClientOutreachLogs();
+  const effectiveUserId = userId || activeStorageUserId;
+  const logs = getClientOutreachLogs(effectiveUserId || undefined);
   const cleanUrl = linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
   const cleanName = name?.trim().toLowerCase();
   const cleanCompany = company?.trim().toLowerCase();
@@ -255,15 +272,42 @@ export function checkClientDuplicate(
   return { isDuplicate: false };
 }
 
-export function appendClientOutreachLog(entry: OutreachLogEntry): void {
-  const logs = getClientOutreachLogs();
+export function appendClientOutreachLog(entry: OutreachLogEntry, userId?: string): void {
+  const effectiveUserId = userId || activeStorageUserId;
+  const logs = getClientOutreachLogs(effectiveUserId || undefined);
+
+  // Prevent duplicate outreach entries for the same prospect
+  const { isDuplicate } = checkClientDuplicate(entry.linkedinUrl, entry.name, entry.company, effectiveUserId || undefined);
+  if (isDuplicate) {
+    const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+    const cleanName = entry.name?.trim().toLowerCase();
+    const cleanCompany = entry.company?.trim().toLowerCase();
+
+    const updated = logs.map((existing) => {
+      const existingUrl = existing.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+      const matchUrl = cleanUrl && existingUrl && cleanUrl === existingUrl;
+      const matchName =
+        cleanName &&
+        cleanCompany &&
+        existing.name.toLowerCase() === cleanName &&
+        existing.company.toLowerCase() === cleanCompany;
+
+      if (matchUrl || matchName) {
+        return { ...existing, ...entry, date: entry.date || existing.date };
+      }
+      return existing;
+    });
+    saveClientOutreachLogs(updated, effectiveUserId || undefined);
+    return;
+  }
+
   const formattedDate = entry.date || new Date().toISOString().split('T')[0];
   const newEntry: OutreachLogEntry = {
     ...entry,
     date: formattedDate
   };
   const updated = [newEntry, ...logs];
-  saveClientOutreachLogs(updated);
+  saveClientOutreachLogs(updated, effectiveUserId || undefined);
 }
 
 export function updateClientOutreachStatus(

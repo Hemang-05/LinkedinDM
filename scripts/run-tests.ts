@@ -1753,10 +1753,6 @@ Sam,Altman,OpenAI,CEO,https://linkedin.com/in/sam-altman`;
     !userB_tamperedUserA &&
     !userB_tamperedEvent;
 
-  // Restore environment globals
-  (global as any).window = originalWindow;
-  (global as any).localStorage = originalLocalStorage;
-
   if (cacheIsIsolated && databaseIsIsolated && userB_satyaIsNew && userA_fullyRestored) {
     passed++;
     console.log('✅ [PASS] Multi-User Isolation End-to-End Test: User A and User B workspaces, databases, outreach events, and local caches are 100% strictly isolated.');
@@ -1771,6 +1767,94 @@ Sam,Altman,OpenAI,CEO,https://linkedin.com/in/sam-altman`;
       userB_tamperedEvent
     });
   }
+
+  // --- 28. Client Storage Outreach Log Deduplication & Review Queue Safety ---
+  console.log('\n--- 28. Client Storage Outreach Log Deduplication & Review Queue Safety ---');
+  const {
+    appendClientOutreachLog,
+    checkClientDuplicate
+  } = await import('../lib/clientStorage');
+
+  const testUserDedupeId = 'user-dedupe-test-uuid';
+  setActiveStorageUser(testUserDedupeId);
+
+  // 1. Initial append
+  appendClientOutreachLog(
+    {
+      date: '2026-10-19',
+      name: 'Tim Cook',
+      company: 'Apple',
+      role: 'CEO',
+      personPosition: 'CEO',
+      relationshipType: 'CEO',
+      linkedinUrl: 'https://www.linkedin.com/in/tim-cook/',
+      status: 'Contacted',
+      notes: 'Initial contact'
+    },
+    testUserDedupeId
+  );
+
+  let dedupeLogs = getClientOutreachLogs(testUserDedupeId);
+  const initialLogged = dedupeLogs.length === 1 && dedupeLogs[0].name === 'Tim Cook';
+
+  // 2. Second append for identical connection (simulating rapid/accidental double-click)
+  appendClientOutreachLog(
+    {
+      date: '2026-10-19',
+      name: 'Tim Cook',
+      company: 'Apple',
+      role: 'CEO',
+      personPosition: 'CEO',
+      relationshipType: 'CEO',
+      linkedinUrl: 'https://www.linkedin.com/in/tim-cook',
+      status: 'Contacted',
+      notes: 'Updated contact attempt'
+    },
+    testUserDedupeId
+  );
+
+  dedupeLogs = getClientOutreachLogs(testUserDedupeId);
+  const deduplicatedOnAppend = dedupeLogs.length === 1 && dedupeLogs[0].notes === 'Updated contact attempt';
+
+  // 3. checkClientDuplicate returns true
+  const dupCheck = checkClientDuplicate(
+    'https://www.linkedin.com/in/tim-cook',
+    'Tim Cook',
+    'Apple',
+    testUserDedupeId
+  );
+
+  // 4. Retroactive deduplication test on read
+  // Directly write array with duplicates to verify getClientOutreachLogs deduplicates on read
+  saveClientOutreachLogs(
+    [
+      { date: '2026-10-18', name: 'Satya Nadella', company: 'Microsoft', role: 'CEO', personPosition: 'CEO', relationshipType: 'CEO', linkedinUrl: 'https://linkedin.com/in/satya-nadella', status: 'Contacted' },
+      { date: '2026-10-19', name: 'Satya Nadella', company: 'Microsoft', role: 'CEO', personPosition: 'CEO', relationshipType: 'CEO', linkedinUrl: 'https://linkedin.com/in/satya-nadella/', status: 'Contacted' },
+      { date: '2026-10-19', name: 'Jensen Huang', company: 'NVIDIA', role: 'CEO', personPosition: 'CEO', relationshipType: 'CEO', linkedinUrl: 'https://linkedin.com/in/jensen-huang', status: 'Contacted' }
+    ],
+    testUserDedupeId
+  );
+
+  const cleanLogs = getClientOutreachLogs(testUserDedupeId);
+  const retroactiveDedupeWorks = cleanLogs.length === 2 && cleanLogs.some(l => l.name === 'Satya Nadella') && cleanLogs.some(l => l.name === 'Jensen Huang');
+
+  if (initialLogged && deduplicatedOnAppend && dupCheck.isDuplicate && retroactiveDedupeWorks) {
+    passed++;
+    console.log('✅ [PASS] Outreach log deduplication: double-clicking contact does not create duplicate logs and retroactively deduplicates on read.');
+  } else {
+    failed++;
+    console.error('❌ [FAIL] Outreach log deduplication test failed:', {
+      initialLogged,
+      deduplicatedOnAppend,
+      isDuplicate: dupCheck.isDuplicate,
+      retroactiveDedupeWorks,
+      logsCount: cleanLogs.length
+    });
+  }
+
+  // Restore environment globals
+  (global as any).window = originalWindow;
+  (global as any).localStorage = originalLocalStorage;
 
   console.log('\n================================================================');
   console.log(`TOTAL TEST SUMMARY: ${passed} Passed, ${failed} Failed`);

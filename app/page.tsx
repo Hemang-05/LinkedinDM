@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Prospect, OutreachLogEntry, OutreachStatus, UserProfile } from '@/types';
 import {
   getClientProspects,
@@ -72,6 +72,7 @@ import {
 } from 'lucide-react';
 
 export default function Home() {
+  const currentUserIdRef = useRef<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authUser, setAuthUser] = useState<any | null>(null);
 
@@ -114,6 +115,7 @@ export default function Home() {
   // Centralized user data loader (Supabase is Single Source of Truth)
   const loadUserData = async (user: any) => {
     try {
+      currentUserIdRef.current = user.id;
       setActiveStorageUser(user.id);
       setAuthUser(user);
 
@@ -176,6 +178,7 @@ export default function Home() {
   };
 
   const handleSignOutUser = () => {
+    currentUserIdRef.current = null;
     if (authUser?.id) {
       clearClientSession(authUser.id);
     }
@@ -249,7 +252,11 @@ export default function Home() {
     if (client) {
       const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
-          await loadUserData(session.user);
+          // Only re-load user data if a genuinely different user authenticated,
+          // avoiding overwriting local optimistic updates during token refreshes.
+          if (event === 'SIGNED_IN' && session.user.id !== currentUserIdRef.current) {
+            await loadUserData(session.user);
+          }
         } else if (event === 'SIGNED_OUT') {
           handleSignOutUser();
         }
@@ -351,9 +358,11 @@ export default function Home() {
   };
 
   const handleProspectUpdated = (updated: Prospect) => {
-    const updatedList = prospects.map((p) => (p.id === updated.id ? updated : p));
-    setProspects(updatedList);
-    saveClientProspects(updatedList, authUser?.id);
+    setProspects((prev) => {
+      const updatedList = prev.map((p) => (p.id === updated.id ? updated : p));
+      saveClientProspects(updatedList, authUser?.id);
+      return updatedList;
+    });
     
     // If marked contacted, ensure DM review modal is closed / not opened
     if (updated.status === 'Contacted') {
