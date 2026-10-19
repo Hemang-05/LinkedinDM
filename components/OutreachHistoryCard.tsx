@@ -2,14 +2,15 @@
 
 import React, { useState } from 'react';
 import { OutreachLogEntry, OutreachStatus } from '@/types';
-import { Building2, Calendar, User, ExternalLink, ChevronDown } from 'lucide-react';
+import { Building2, Calendar, User, ExternalLink, ChevronDown, Trash2 } from 'lucide-react';
 
 interface OutreachHistoryCardProps {
   entry: OutreachLogEntry;
   onStatusChange: (entry: OutreachLogEntry, newStatus: OutreachStatus) => void;
+  onDelete?: (entry: OutreachLogEntry) => void;
 }
 
-export function OutreachHistoryCard({ entry, onStatusChange }: OutreachHistoryCardProps) {
+export function OutreachHistoryCard({ entry, onStatusChange, onDelete }: OutreachHistoryCardProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   const statusOptions: OutreachStatus[] = [
@@ -100,17 +101,29 @@ export function OutreachHistoryCard({ entry, onStatusChange }: OutreachHistoryCa
           )}
         </div>
 
-        {entry.linkedinUrl && (
-          <a
-            href={entry.linkedinUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-[#0A66C2] hover:underline font-semibold flex items-center gap-1"
-          >
-            <span>LinkedIn</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
+        <div className="flex items-center gap-2">
+          {entry.linkedinUrl && (
+            <a
+              href={entry.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[#0A66C2] hover:underline font-semibold flex items-center gap-1"
+            >
+              <span>LinkedIn</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+
+          {onDelete && (
+            <button
+              onClick={() => onDelete(entry)}
+              title="Delete outreach log entry"
+              className="text-zinc-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

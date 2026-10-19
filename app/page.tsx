@@ -20,7 +20,8 @@ import {
   clearClientSession,
   setActiveStorageUser,
   getLegacyUnmigratedProspects,
-  clearLegacyStorage
+  clearLegacyStorage,
+  deleteClientOutreachLog
 } from '@/lib/clientStorage';
 import { EMPTY_PROFILE } from '@/lib/profile';
 import { Header } from '@/components/Header';
@@ -514,6 +515,11 @@ export default function Home() {
     saveClientProspects(updatedProspects, authUser?.id);
   };
 
+  const handleOutreachDelete = (entry: OutreachLogEntry) => {
+    const remaining = deleteClientOutreachLog(entry.linkedinUrl, entry.name, entry.company, authUser?.id);
+    setOutreachLogs(remaining);
+  };
+
   const scrollToCsvUpload = (catKey?: string) => {
     if (catKey) setActiveCategory(catKey);
     const el = document.getElementById('csv-upload-section');
@@ -555,9 +561,32 @@ export default function Home() {
       .slice(0, 6);
   }, [prospects]);
 
-  // Outreach Filtered Logs
+  // Outreach Filtered Logs with Self-Healing In-Memory Deduplication
   const filteredOutreachLogs = useMemo(() => {
-    return outreachLogs.filter((entry) => {
+    const seenUrls = new Set<string>();
+    const seenNames = new Set<string>();
+    const deduplicated: OutreachLogEntry[] = [];
+
+    for (const entry of outreachLogs) {
+      const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+      const normUrl = (cleanUrl && cleanUrl.includes('linkedin.com/in/') && cleanUrl.length > 'https://www.linkedin.com/in/'.length)
+        ? cleanUrl
+        : '';
+      const cleanName = entry.name?.trim().toLowerCase() || '';
+      const cleanCompany = entry.company?.trim().toLowerCase() || '';
+      const nameKey = cleanName.length > 1 ? `${cleanName}|${cleanCompany}` : '';
+
+      const isUrlDuplicate = normUrl ? seenUrls.has(normUrl) : false;
+      const isNameDuplicate = nameKey ? seenNames.has(nameKey) : false;
+
+      if (!isUrlDuplicate && !isNameDuplicate) {
+        if (normUrl) seenUrls.add(normUrl);
+        if (nameKey) seenNames.add(nameKey);
+        deduplicated.push(entry);
+      }
+    }
+
+    return deduplicated.filter((entry) => {
       const matchSearch =
         !searchQuery ||
         entry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1069,6 +1098,7 @@ export default function Home() {
                       key={index}
                       entry={entry}
                       onStatusChange={handleOutreachStatusChange}
+                      onDelete={handleOutreachDelete}
                     />
                   ))}
                 </div>

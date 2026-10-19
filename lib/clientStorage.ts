@@ -183,11 +183,48 @@ export function getClientOutreachLogs(userId?: string): OutreachLogEntry[] {
         deduplicated.push(entry);
       }
     }
+
+    if (deduplicated.length !== parsed.length) {
+      try {
+        localStorage.setItem(key, JSON.stringify(deduplicated));
+      } catch {}
+    }
+
     return deduplicated;
   } catch (err) {
     console.error('Failed to read outreach logs from localStorage:', err);
     return [];
   }
+}
+
+export function deleteClientOutreachLog(
+  linkedinUrl?: string,
+  name?: string,
+  company?: string,
+  userId?: string
+): OutreachLogEntry[] {
+  const effectiveUserId = userId || activeStorageUserId;
+  const logs = getClientOutreachLogs(effectiveUserId || undefined);
+  const cleanUrl = linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+  const cleanName = name?.trim().toLowerCase() || '';
+  const cleanCompany = company?.trim().toLowerCase() || '';
+
+  const filtered = logs.filter((entry) => {
+    const entryUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
+    if (cleanUrl && entryUrl && cleanUrl === entryUrl) return false;
+    if (
+      cleanName &&
+      cleanName.length > 1 &&
+      entry.name?.trim().toLowerCase() === cleanName &&
+      (!cleanCompany || !entry.company || entry.company.trim().toLowerCase() === cleanCompany)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  saveClientOutreachLogs(filtered, effectiveUserId || undefined);
+  return filtered;
 }
 
 export function saveClientOutreachLogs(logs: OutreachLogEntry[], userId?: string): void {
