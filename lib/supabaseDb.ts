@@ -534,6 +534,53 @@ export async function markConnectionSkipped(
 }
 
 /**
+ * Resets a connection status back to 'new' (e.g. on Undo).
+ */
+export async function resetConnectionStatus(
+  userId: string,
+  connectionId: string
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  const now = new Date().toISOString();
+  try {
+    let targetId = connectionId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionId);
+    if (!isUuid) {
+      const { data: matched } = await client
+        .from('connections')
+        .select('id, raw_data')
+        .eq('user_id', userId)
+        .limit(20);
+      const found = (matched || []).find((c: any) => c.raw_data?.id === connectionId);
+      if (found?.id) {
+        targetId = found.id;
+      }
+    }
+
+    const { error } = await client
+      .from('connections')
+      .update({
+        status: 'new',
+        contacted_at: null,
+        updated_at: now
+      })
+      .eq('id', targetId)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[Supabase] Error resetting connection status:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Supabase] Exception resetting connection status:', err);
+    return false;
+  }
+}
+
+/**
  * Query due follow-ups (scheduled_for <= now() and completed_at is null)
  */
 export async function getDueFollowUps(userId: string): Promise<DueFollowUp[]> {

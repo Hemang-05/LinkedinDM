@@ -88,22 +88,25 @@ export function updateClientProspect(
   const effectiveUserId = userId || activeStorageUserId;
   const list = getClientProspects(effectiveUserId || undefined);
   const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
 
   const now = new Date().toISOString();
-  list[idx].status = newStatus;
-  list[idx].updatedAt = now;
-  if (notRelevantReason !== undefined) {
-    list[idx].notRelevantReason = notRelevantReason;
-  }
-  if (updatedMessage !== undefined) {
-    list[idx].draftedMessage = updatedMessage;
-  }
-  if (newStatus === 'Contacted') {
-    list[idx].lastContactedDate = now.split('T')[0];
-  }
+  let updatedProspect: Prospect | null = null;
 
-  saveClientProspects(list, effectiveUserId || undefined);
+  if (idx !== -1) {
+    list[idx].status = newStatus;
+    list[idx].updatedAt = now;
+    if (notRelevantReason !== undefined) {
+      list[idx].notRelevantReason = notRelevantReason;
+    }
+    if (updatedMessage !== undefined) {
+      list[idx].draftedMessage = updatedMessage;
+    }
+    if (newStatus === 'Contacted') {
+      list[idx].lastContactedDate = now.split('T')[0];
+    }
+    saveClientProspects(list, effectiveUserId || undefined);
+    updatedProspect = list[idx];
+  }
 
   if (typeof window !== 'undefined') {
     // 1. Maintain IndexedDB cache
@@ -117,16 +120,19 @@ export function updateClientProspect(
     import('./supabaseClient')
       .then(({ getCurrentSupabaseUser }) => {
         getCurrentSupabaseUser().then((user) => {
-          if (!user) return;
-          import('./supabaseDb').then(({ markConnectionContacted, markConnectionSkipped }) => {
+          const targetUid = user?.id || effectiveUserId;
+          if (!targetUid) return;
+          import('./supabaseDb').then(({ markConnectionContacted, markConnectionSkipped, resetConnectionStatus }) => {
             if (newStatus === 'Contacted') {
-              markConnectionContacted(user.id, id, {
-                initialMessage: list[idx].draftedMessage,
-                followUpDay5: list[idx].followUpDay5Message,
-                followUpDay12: list[idx].followUpDay12Message
+              markConnectionContacted(targetUid, id, {
+                initialMessage: updatedMessage || updatedProspect?.draftedMessage,
+                followUpDay5: updatedProspect?.followUpDay5Message,
+                followUpDay12: updatedProspect?.followUpDay12Message
               });
             } else if (newStatus === 'not_relevant') {
-              markConnectionSkipped(user.id, id);
+              markConnectionSkipped(targetUid, id);
+            } else if (newStatus === 'Not contacted') {
+              resetConnectionStatus(targetUid, id);
             }
           });
         });
@@ -134,7 +140,7 @@ export function updateClientProspect(
       .catch(() => {});
   }
 
-  return list[idx];
+  return updatedProspect;
 }
 
 export function addClientProspect(prospect: Prospect): Prospect {
@@ -159,7 +165,7 @@ export function getClientOutreachLogs(userId?: string): OutreachLogEntry[] {
     const deduplicated: OutreachLogEntry[] = [];
     for (const entry of parsed) {
       const cleanUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
-      const itemKey = (cleanUrl && cleanUrl.includes('linkedin.com/in/'))
+      const itemKey = (cleanUrl && cleanUrl.includes('linkedin.com/in/') && cleanUrl.length > 'https://www.linkedin.com/in/'.length)
         ? cleanUrl
         : `${entry.name?.trim().toLowerCase()}|${entry.company?.trim().toLowerCase()}`;
       if (!seen.has(itemKey)) {
@@ -256,12 +262,20 @@ export function checkClientDuplicate(
 
   for (const entry of logs) {
     const entryUrl = entry.linkedinUrl?.trim().toLowerCase().replace(/\/+$/, '');
-    if (cleanUrl && entryUrl && cleanUrl === entryUrl) {
+    const isProfileUrl = Boolean(
+      cleanUrl &&
+      entryUrl &&
+      cleanUrl.includes('linkedin.com/in/') &&
+      cleanUrl.length > 'https://www.linkedin.com/in/'.length
+    );
+    if (isProfileUrl && cleanUrl === entryUrl) {
       return { isDuplicate: true, existingEntry: entry };
     }
     if (
       cleanName &&
       cleanCompany &&
+      cleanName.length > 1 &&
+      cleanCompany.length > 1 &&
       entry.name.toLowerCase() === cleanName &&
       entry.company.toLowerCase() === cleanCompany
     ) {

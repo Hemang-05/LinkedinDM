@@ -46,7 +46,10 @@ import {
   getDueFollowUps,
   migrateLocalDataToSupabase,
   saveSupabaseProfile,
-  ensureSupabaseProfile
+  ensureSupabaseProfile,
+  markConnectionContacted,
+  markConnectionSkipped,
+  resetConnectionStatus
 } from '@/lib/supabaseDb';
 import {
   Sparkles,
@@ -358,22 +361,37 @@ export default function Home() {
   };
 
   const handleProspectUpdated = (updated: Prospect) => {
+    // 1. Functional state update for prospects
     setProspects((prev) => {
       const updatedList = prev.map((p) => (p.id === updated.id ? updated : p));
       saveClientProspects(updatedList, authUser?.id);
       return updatedList;
     });
     
-    // If marked contacted, ensure DM review modal is closed / not opened
+    // 2. Persist status directly to Supabase if authenticated
+    if (authUser?.id) {
+      if (updated.status === 'Contacted') {
+        markConnectionContacted(authUser.id, updated.id, {
+          initialMessage: updated.draftedMessage,
+          followUpDay5: updated.followUpDay5Message,
+          followUpDay12: updated.followUpDay12Message
+        });
+        getDueFollowUps(authUser.id).then((due) => setDueFollowUpsCount(due.length));
+      } else if (updated.status === 'not_relevant') {
+        markConnectionSkipped(authUser.id, updated.id);
+      } else if (updated.status === 'Not contacted') {
+        resetConnectionStatus(authUser.id, updated.id);
+      }
+    }
+
+    // 3. Ensure DM review modal is closed if marked contacted
     if (updated.status === 'Contacted') {
       setSelectedProspect(null);
-      if (authUser?.id) {
-        getDueFollowUps(authUser.id).then((due) => setDueFollowUpsCount(due.length));
-      }
     } else if (selectedProspect && selectedProspect.id === updated.id) {
       setSelectedProspect(updated);
     }
 
+    // 4. Fresh outreach logs state
     const updatedLogs = getClientOutreachLogs(authUser?.id);
     setOutreachLogs(updatedLogs);
   };
@@ -854,6 +872,7 @@ export default function Home() {
                   onSwitchToList={() => setProspectsViewMode('grid')}
                   userProfile={userProfile}
                   onOpenSettings={() => setCurrentTab('settings')}
+                  userId={authUser?.id}
                 />
               ) : (
                 /* GRID VIEW */

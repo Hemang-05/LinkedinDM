@@ -18,6 +18,7 @@ import {
   appendClientOutreachLog,
   isProfileComplete
 } from '@/lib/clientStorage';
+import { normalizeLinkedInUrl } from '@/lib/urlNormalizer';
 import {
   Check,
   Copy,
@@ -45,6 +46,7 @@ interface ReviewQueueViewProps {
   onSwitchToList: () => void;
   userProfile?: UserProfile | null;
   onOpenSettings?: () => void;
+  userId?: string;
 }
 
 interface UndoAction {
@@ -72,18 +74,19 @@ export function ReviewQueueView({
   onProspectUpdated,
   onSwitchToList,
   userProfile: propProfile,
-  onOpenSettings
+  onOpenSettings,
+  userId
 }: ReviewQueueViewProps) {
   const [selectedCategory, setSelectedCategory] = useState<'all' | ProspectCategory>('all');
   const [includeOther, setIncludeOther] = useState<boolean>(false);
-  const [activeQueue, setActiveQueue] = useState<Prospect[]>([]);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
   const [copyFeedback, setCopyFeedback] = useState<'day0' | 'day5' | 'day12' | 'copied_and_opened' | null>(null);
 
-  // Set of handled prospect IDs in the current session (contacted or not_relevant).
-  // Prevents prospects from ever flashing or blinking back into the queue during background parent updates.
-  const handledIdsRef = React.useRef<Set<string>>(new Set());
+  // Session tracking: prospect IDs and normalized LinkedIn URLs handled in this session.
+  // This guarantees that any prospect marked contacted or not relevant NEVER flashes or reappears.
+  const [handledKeys, setHandledKeys] = useState<Set<string>>(() => new Set());
+  // Ordered IDs of cards skipped to the back of the queue
+  const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const isHandlingRef = React.useRef<boolean>(false);
 
   // Collapsed "More" accordion state
@@ -100,13 +103,17 @@ export function ReviewQueueView({
   // Next-card pregeneration cache: maps prospect id -> GeneratedSequence
   const [sequenceCache, setSequenceCache] = useState<Record<string, GeneratedSequence>>({});
 
-  // Sync active queue when prospects or selected category change
-  useEffect(() => {
-    // Only pending prospects (not contacted, not marked not_relevant, and not handled in this session)
+  // Pure declarative derivation of the review queue from prospects, category filter, and session actions
+  const queue = useMemo(() => {
+    // 1. Filter prospects that are pending and not handled in this session
     const pending = prospects.filter((p) => {
-      if (handledIdsRef.current.has(p.id)) return false;
-      const isPending = p.status !== 'Contacted' && p.status !== 'not_relevant';
-      if (!isPending) return false;
+      const normUrl = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      if (handledKeys.has(p.id) || (normUrl && handledKeys.has(normUrl))) {
+        return false;
+      }
+      if (p.status === 'Contacted' || p.status === 'not_relevant') {
+        return false;
+      }
       const cat = p.category || classifyTitle(p.jobTitle);
       if (cat === 'excluded') return false; // Excluded roles never enter review queue
       if (selectedCategory === 'all') {
@@ -116,13 +123,28 @@ export function ReviewQueueView({
       return cat === selectedCategory;
     });
 
-    setActiveQueue(pending);
-    setCurrentIndex(0);
-    setIsMoreOpen(false);
-    setShowReasonPicker(false);
-  }, [prospects, selectedCategory, includeOther]);
+    // 2. Separate unskipped prospects and skipped prospects (skipped cards go to the back)
+    const skippedOrder = new Map<string, number>();
+    skippedIds.forEach((id, idx) => skippedOrder.set(id, idx));
 
-  const currentProspect: Prospect | undefined = activeQueue[currentIndex];
+    const regular: Prospect[] = [];
+    const skipped: Prospect[] = [];
+
+    for (const p of pending) {
+      if (skippedOrder.has(p.id)) {
+        skipped.push(p);
+      } else {
+        regular.push(p);
+      }
+    }
+
+    skipped.sort((a, b) => (skippedOrder.get(a.id) ?? 0) - (skippedOrder.get(b.id) ?? 0));
+
+    return [...regular, ...skipped];
+  }, [prospects, handledKeys, skippedIds, selectedCategory, includeOther]);
+
+  // Current prospect is ALWAYS the head of the queue
+  const currentProspect: Prospect | undefined = queue[0];
   const rawProfile: UserProfile | null = propProfile || getClientProfile();
 
   const userProfile: UserProfile | null = useMemo(() => {
@@ -179,11 +201,11 @@ export function ReviewQueueView({
       generateAndCache(currentProspect);
     }
 
-    const nextProspect = activeQueue[currentIndex + 1];
+    const nextProspect = queue[1];
     if (nextProspect) {
       generateAndCache(nextProspect);
     }
-  }, [currentProspect, activeQueue, currentIndex, userProfile, customGoal, customAngle, sequenceCache]);
+  }, [currentProspect, queue, userProfile, customGoal, customAngle, sequenceCache]);
 
   // Current sequence computation
   const currentSequence: GeneratedSequence | null = useMemo(() => {
@@ -260,30 +282,32 @@ export function ReviewQueueView({
     }, 200);
 
     const targetProspect = currentProspect;
-    handledIdsRef.current.add(targetProspect.id);
+    const normUrl = normalizeLinkedInUrl(targetProspect.linkedinUrl, targetProspect.name, targetProspect.company);
 
-    const previousStatus = targetProspect.status;
-    const previousDate = targetProspect.lastContactedDate;
-
-    // Push to undo stack
+    // 1. Push to undo stack
     setUndoStack((prev) => [
       {
         type: 'contacted',
         prospectId: targetProspect.id,
-        previousStatus,
-        previousContactedDate: previousDate,
+        previousStatus: targetProspect.status,
+        previousContactedDate: targetProspect.lastContactedDate,
         originalProspect: targetProspect
       },
       ...prev
     ]);
 
-    // Optimistically remove from activeQueue immediately so next prospect shows with zero delay
-    setActiveQueue((prev) => prev.filter((p) => p.id !== targetProspect.id));
+    // 2. Remove from skippedIds if present
+    setSkippedIds((prev) => prev.filter((id) => id !== targetProspect.id));
 
-    // Save status
-    const updated = updateClientProspect(targetProspect.id, 'Contacted', currentSequence?.day0);
+    // 3. Mark handled in state by both ID and canonical URL (removes instantly from queue)
+    setHandledKeys((prev) => {
+      const next = new Set(prev);
+      next.add(targetProspect.id);
+      if (normUrl) next.add(normUrl);
+      return next;
+    });
 
-    // Log to outreach CRM before triggering parent update (so getClientOutreachLogs has fresh entry)
+    // 4. Log to outreach CRM
     appendClientOutreachLog({
       date: new Date().toISOString().split('T')[0],
       name: targetProspect.name,
@@ -294,12 +318,19 @@ export function ReviewQueueView({
       linkedinUrl: targetProspect.linkedinUrl,
       status: 'Contacted',
       notes: `Sent ${currentSequence?.persona || 'standard'} pitch via Review Queue`
-    });
+    }, userId);
 
-    if (updated) {
-      onProspectUpdated(updated);
-    }
-  }, [currentProspect, currentSequence, onProspectUpdated, userProfile]);
+    // 5. Update prospect in parent state and storage
+    const updated: Prospect = {
+      ...targetProspect,
+      status: 'Contacted',
+      draftedMessage: currentSequence?.day0 || targetProspect.draftedMessage,
+      lastContactedDate: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString()
+    };
+    updateClientProspect(targetProspect.id, 'Contacted', currentSequence?.day0, undefined, userId);
+    onProspectUpdated(updated);
+  }, [currentProspect, currentSequence, onProspectUpdated, userProfile, userId]);
 
   // Action: Mark Not Relevant
   const handleMarkNotRelevant = useCallback((reason?: NotRelevantReason) => {
@@ -310,53 +341,64 @@ export function ReviewQueueView({
     }, 200);
 
     const targetProspect = currentProspect;
-    handledIdsRef.current.add(targetProspect.id);
+    const normUrl = normalizeLinkedInUrl(targetProspect.linkedinUrl, targetProspect.name, targetProspect.company);
 
-    const previousStatus = targetProspect.status;
-    const previousReason = targetProspect.notRelevantReason;
-
-    // Push to undo stack
+    // 1. Push to undo stack
     setUndoStack((prev) => [
       {
         type: 'not_relevant',
         prospectId: targetProspect.id,
-        previousStatus,
-        previousReason,
+        previousStatus: targetProspect.status,
+        previousReason: targetProspect.notRelevantReason,
         originalProspect: targetProspect
       },
       ...prev
     ]);
 
-    // Optimistically remove from activeQueue immediately
-    setActiveQueue((prev) => prev.filter((p) => p.id !== targetProspect.id));
+    // 2. Remove from skipped list
+    setSkippedIds((prev) => prev.filter((id) => id !== targetProspect.id));
 
-    const updated = updateClientProspect(targetProspect.id, 'not_relevant', undefined, reason);
-    if (updated) {
-      onProspectUpdated(updated);
-    }
+    // 3. Mark handled in state (removes instantly from queue)
+    setHandledKeys((prev) => {
+      const next = new Set(prev);
+      next.add(targetProspect.id);
+      if (normUrl) next.add(normUrl);
+      return next;
+    });
+
+    // 4. Update prospect in parent state and storage
+    const updated: Prospect = {
+      ...targetProspect,
+      status: 'not_relevant',
+      notRelevantReason: reason,
+      updatedAt: new Date().toISOString()
+    };
+    updateClientProspect(targetProspect.id, 'not_relevant', undefined, reason, userId);
+    onProspectUpdated(updated);
 
     setShowReasonPicker(false);
-  }, [currentProspect, onProspectUpdated]);
+  }, [currentProspect, onProspectUpdated, userId]);
 
   // Action: Skip (move to back of queue)
   const handleSkip = useCallback(() => {
-    if (!currentProspect || activeQueue.length <= 1) return;
+    if (!currentProspect || queue.length <= 1) return;
 
+    const targetId = currentProspect.id;
     setUndoStack((prev) => [
       {
         type: 'skip',
-        prospectId: currentProspect.id,
+        prospectId: targetId,
         previousStatus: currentProspect.status,
         originalProspect: currentProspect
       },
       ...prev
     ]);
 
-    setActiveQueue((prev) => {
-      const rest = prev.slice(1);
-      return [...rest, currentProspect];
+    setSkippedIds((prev) => {
+      const filtered = prev.filter((id) => id !== targetId);
+      return [...filtered, targetId];
     });
-  }, [currentProspect, activeQueue]);
+  }, [currentProspect, queue.length]);
 
   // Action: Undo last action
   const handleUndo = useCallback(() => {
@@ -365,35 +407,50 @@ export function ReviewQueueView({
     const [lastAction, ...remainingStack] = undoStack;
     setUndoStack(remainingStack);
 
-    // Remove from handledIdsRef so it can be viewed again
-    handledIdsRef.current.delete(lastAction.prospectId);
-
     if (lastAction.type === 'skip') {
-      // Move last item of queue back to the front
-      setActiveQueue((prev) => {
-        if (prev.length <= 1) return prev;
-        const last = prev[prev.length - 1];
-        return [last, ...prev.slice(0, prev.length - 1)];
-      });
+      // Remove from skippedIds to bring back to original position
+      setSkippedIds((prev) => prev.filter((id) => id !== lastAction.prospectId));
       return;
     }
 
     // Revert status for 'contacted' or 'not_relevant'
-    const reverted = updateClientProspect(
+    const target = lastAction.originalProspect;
+    const normUrl = target ? normalizeLinkedInUrl(target.linkedinUrl, target.name, target.company) : '';
+
+    setHandledKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(lastAction.prospectId);
+      if (normUrl) next.delete(normUrl);
+      return next;
+    });
+
+    const reverted: Prospect = {
+      ...(target || {
+        id: lastAction.prospectId,
+        name: 'Connection',
+        jobTitle: '',
+        company: '',
+        linkedinUrl: '',
+        status: lastAction.previousStatus,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }),
+      status: lastAction.previousStatus,
+      notRelevantReason: lastAction.previousReason,
+      lastContactedDate: lastAction.previousContactedDate,
+      updatedAt: new Date().toISOString()
+    };
+
+    updateClientProspect(
       lastAction.prospectId,
       lastAction.previousStatus,
       undefined,
-      lastAction.previousReason
+      lastAction.previousReason,
+      userId
     );
 
-    if (reverted) {
-      onProspectUpdated(reverted);
-      // Put prospect back at head of current queue
-      setActiveQueue((prev) => [reverted, ...prev.filter((p) => p.id !== reverted.id)]);
-    } else if (lastAction.originalProspect) {
-      setActiveQueue((prev) => [lastAction.originalProspect!, ...prev.filter((p) => p.id !== lastAction.prospectId)]);
-    }
-  }, [undoStack, onProspectUpdated]);
+    onProspectUpdated(reverted);
+  }, [undoStack, userId, onProspectUpdated]);
 
   // Global Keyboard Shortcuts (C, N, S, U, Enter)
   useEffect(() => {
@@ -438,14 +495,20 @@ export function ReviewQueueView({
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: 0 };
     for (const p of prospects) {
-      if (p.status !== 'Contacted' && p.status !== 'not_relevant' && !handledIdsRef.current.has(p.id)) {
+      const normUrl = normalizeLinkedInUrl(p.linkedinUrl, p.name, p.company);
+      if (
+        p.status !== 'Contacted' &&
+        p.status !== 'not_relevant' &&
+        !handledKeys.has(p.id) &&
+        (!normUrl || !handledKeys.has(normUrl))
+      ) {
         counts.all = (counts.all || 0) + 1;
         const cat = p.category || classifyTitle(p.jobTitle);
         counts[cat] = (counts[cat] || 0) + 1;
       }
     }
     return counts;
-  }, [prospects, activeQueue.length]);
+  }, [prospects, handledKeys]);
 
   const activeCategoryCount = categoryCounts[selectedCategory] || 0;
   const currentCategory: ProspectCategory = currentProspect
@@ -538,16 +601,16 @@ export function ReviewQueueView({
           </button>
         </div>
       ) : (
-        <div className="bg-white border border-[#E0DFDC] rounded-2xl shadow-sm overflow-hidden divide-y divide-zinc-100 transition-all">
+        <div key={currentProspect.id} className="bg-white border border-[#E0DFDC] rounded-2xl shadow-sm overflow-hidden divide-y divide-zinc-100 transition-all">
           {/* Progress Bar & Counter */}
           <div className="bg-zinc-50/70 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600 font-medium">
             <div className="flex items-center gap-2">
               <span className="font-bold text-zinc-900">
-                Card {currentIndex + 1} of {activeQueue.length}
+                Card {queue.length > 0 ? 1 : 0} of {queue.length}
               </span>
               <span className="text-zinc-400">·</span>
               <span className="text-[11px] text-zinc-500">
-                {activeQueue.length} remaining
+                {queue.length} remaining
               </span>
             </div>
 
@@ -566,7 +629,7 @@ export function ReviewQueueView({
                 <div
                   className="bg-[#0A66C2] h-full transition-all duration-300"
                   style={{
-                    width: `${Math.min(100, Math.round(((currentIndex + 1) / Math.max(activeQueue.length, 1)) * 100))}%`
+                    width: `${Math.min(100, Math.round((handledKeys.size / Math.max(handledKeys.size + queue.length, 1)) * 100))}%`
                   }}
                 />
               </div>
